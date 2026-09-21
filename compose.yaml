@@ -1,0 +1,24 @@
+# Aligner submission stack — one command: docker compose up --build
+# App: http://localhost:3817  |  demo login: m.vance@apexops.io (see seed)
+# Billing demo fixture is ON by default (BILLING_DEMO_MODE=true, no secrets).
+services:
+  app:
+    build: .
+    ports:
+      - "3817:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+      PORT: 3000
+      PGDATA_DIR: /data/pg
+      BILLING_DEMO_MODE: "true"
+      DEMO_MFA_HINT: "1"
+      # BR-13: second flag required for the MFA dev-hint in production builds.
+      # Judge/demo container only — never set on real production.
+      ALLOW_DEMO_HINT_IN_PROD: "1"
+    volumes:
+      - pgdata:/data/pg
+    restart: unless-stopped
+
+volumes:
+  pgdata:
