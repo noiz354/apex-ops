@@ -1,0 +1,104 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789371459048,
+      "tag": "0000_tiny_the_renegades",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789539064707,
+      "tag": "0001_familiar_cammi",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789540506182,
+      "tag": "0002_married_pete_wisdom",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789562705814,
+      "tag": "0003_rainy_black_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789563385149,
+      "tag": "0004_pink_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789573381760,
+      "tag": "0005_facilities",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789576117158,
+      "tag": "0006_settings_kv",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789579148738,
+      "tag": "0007_handovers",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789619778438,
+      "tag": "0008_part_movements_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789620344304,
+      "tag": "0009_invoices_3way_match",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789982156373,
+      "tag": "0010_br14_community_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789982795033,
+      "tag": "0011_br02_wo_description_loto",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789983484402,
+      "tag": "0012_br01_pr_convert_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789985117887,
+      "tag": "0013_br15_audit_append_only",
+      "breakpoints": true
+    }
+  ]
+}
