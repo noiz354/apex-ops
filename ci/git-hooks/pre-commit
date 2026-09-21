@@ -1,0 +1,7 @@
+#!/bin/sh
+CHURN="next-env.d.ts"
+if ! git diff --quiet -- "$CHURN" 2>/dev/null; then
+  echo "pre-commit: reverting dev-server churn in $CHURN (stage explicitly to keep an intentional change)"
+  git checkout HEAD -- "$CHURN" || true
+fi
+exit 0

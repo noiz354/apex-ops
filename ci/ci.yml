@@ -1,0 +1,101 @@
+# CI workflow — SIAP PAKAI, menunggu aktivasi.
+#
+# Push ke `.github/workflows/` dari sandbox ditolak GitHub App karena tidak
+# punya permission `workflows`. Aktivasi (oleh maintainer dengan akses):
+#
+#   mkdir -p .github/workflows
+#   cp ci/ci.yml .github/workflows/ci.yml
+#   git add .github/workflows/ci.yml
+#   git commit -m "ci: activate CI workflow (typecheck + lint + audit gate + build)"
+#   git push
+#
+# Phase 0 (docs/AUDIT_SAAS_E2E.md §K): minimum safety net.
+# Phase 1: + real test suite (unit + integration against throwaway PGlite).
+# Gates: typecheck, lint, tests, dependency security audit (prod deps, high+), production build.
+name: CI
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck · Lint · Test · Audit · Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Lint (eslint, zero warnings)
+        run: npm run lint
+
+      # Unit + integration tests. Integration spins up its own throwaway
+      # PGlite database under .data/ (no external services needed in CI).
+      - name: Test (node --test via tsx)
+        run: npm test
+
+      # Fail on high+ advisories in production deps. Dev deps are reported
+      # (non-blocking) so regressions stay visible without blocking merges.
+      - name: Security audit (prod, high+)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Security audit (all, informational)
+        run: npm audit --audit-level=high || true
+
+      - name: Build (next build)
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # A.14 / SDD T3-7 — Playwright E2E (CI-ready; boots its own dev server).
+  # Note: this job lives in ci/ci.yml until A.16 activation (the GitHub App
+  # cannot push workflow files — see the header at the top of this file).
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: Playwright E2E (critical journey + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (+ system deps)
+        run: npx playwright install --with-deps chromium
+
+      - name: Seed database
+        run: npm run db:setup
+
+      - name: Run E2E harness (webServer boots next dev via config)
+        run: npm run test:e2e
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
