@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardList, CloudUpload, Inbox, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -117,9 +117,9 @@ export function AuditQueue() {
     return () => { alive = false; };
   }, []);
 
-  const rows = audits.filter(
+  const rows = useMemo(() => audits.filter(
     (a) => a.id.toLowerCase().includes(q.toLowerCase()) || a.title.toLowerCase().includes(q.toLowerCase())
-  );
+  ), [audits, q]);
   const lastDone = completed[0] ?? null;
 
   return (

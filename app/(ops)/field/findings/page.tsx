@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertOctagon,
@@ -61,7 +61,7 @@ function toRecord(r: LiveFindingRow): FindingRecord {
     inspector: '—',
     inspectionId: r.inspectionNumber ?? '—',
     reportedAt: new Date(r.createdAt).toLocaleString(),
-    actionRequired: 'Open triage desk for action',
+    actionRequired: 'Buka meja triase untuk aksi',
     convertedWo: r.convertedWoNumber ?? undefined,
   };
 }
@@ -88,7 +88,7 @@ export default function FindingsListPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : 'Failed to load findings');
+          setLoadError(err instanceof Error ? err.message : 'Gagal memuat temuan');
           setLoading(false);
         }
       }
@@ -98,14 +98,14 @@ export default function FindingsListPage() {
     };
   }, []);
 
-  const filtered = rows.filter((f) => {
+  const filtered = useMemo(() => rows.filter((f) => {
     if (filterSev !== 'ALL' && f.severity !== filterSev) return false;
     const needle = q.trim().toLowerCase();
     return (
       !needle ||
       `${f.id} ${f.title} ${f.assetId} ${f.inspector} ${f.zone}`.toLowerCase().includes(needle)
     );
-  });
+  }), [rows, filterSev, q]);
 
   return (
     <div className="flex flex-col gap-6 pb-16">
@@ -113,14 +113,14 @@ export default function FindingsListPage() {
       <section className="flex flex-col gap-2">
         <nav className="flex items-center gap-2 text-xs text-muted" aria-label="Breadcrumb">
           <Link className="hover:text-cobalt transition-colors" href="/">
-            Home
+            Beranda
           </Link>
           <span>/</span>
           <Link className="hover:text-cobalt transition-colors" href="/field-inspections">
-            Field Inspections
+            Inspeksi Lapangan
           </Link>
           <span>/</span>
-          <span className="font-semibold text-body">Findings &amp; Defect Triage Desk</span>
+          <span className="font-semibold text-body">Meja Triase Temuan &amp; Defek</span>
         </nav>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-1">
@@ -131,14 +131,14 @@ export default function FindingsListPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink font-display">
-                  Findings &amp; Auto-WO Conversion Desk
+                  Meja Temuan &amp; Konversi WO
                 </h1>
                 <span className="px-2 py-0.5 rounded-full bg-fail text-white text-[11px] font-mono font-bold">
-                  {loading ? '…' : `${rows.filter((f) => f.status === 'PENDING_TRIAGE').length} Pending Triage`}
+                  {loading ? '…' : `${rows.filter((f) => f.status === 'PENDING_TRIAGE').length} Menunggu Triase`}
                 </span>
               </div>
               <p className="text-xs text-muted mt-0.5">
-                Review failed checklist steps and convert critical field defects into dispatched Work Orders.
+                Tinjau langkah checklist yang gagal dan konversi defek lapangan kritis menjadi Work Order.
               </p>
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function FindingsListPage() {
           <div className="flex items-center gap-2">
             <Link href="/field/findings/new">
               <Button className="h-9 gap-1.5 text-xs bg-fail hover:bg-fail-dot text-white">
-                <Plus size={14} /> + Log Defect Finding
+                <Plus size={14} /> + Catat Temuan Defek
               </Button>
             </Link>
           </div>
@@ -158,10 +158,10 @@ export default function FindingsListPage() {
         <div className="bg-card rounded-xl p-4 border border-border-subtle shadow-card flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
-              Total Logged Defects
+              Total Defek Tercatat
             </span>
             <span className="text-2xl font-bold font-display text-ink tabular-nums">{loading ? '…' : String(rows.length).padStart(2, '0')}</span>
-            <span className="text-xs text-muted block mt-0.5">Across all zones (7d)</span>
+            <span className="text-xs text-muted block mt-0.5">Semua zona (7 hari)</span>
           </div>
           <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center text-muted">
             <Layers size={20} />
@@ -171,10 +171,10 @@ export default function FindingsListPage() {
         <div className="bg-card rounded-xl p-4 border border-border-subtle shadow-card flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
-              Critical / Immediate Hazard
+              Kritis / Bahaya Langsung
             </span>
             <span className="text-2xl font-bold font-display text-fail tabular-nums">{loading ? '…' : String(rows.filter((f) => f.severity === 'CRITICAL').length).padStart(2, '0')}</span>
-            <span className="text-xs text-fail font-semibold block mt-0.5">LOTO Lockout Required</span>
+            <span className="text-xs text-fail font-semibold block mt-0.5">Perlu Lockout LOTO</span>
           </div>
           <div className="w-10 h-10 rounded-lg bg-fail-bg flex items-center justify-center text-fail">
             <AlertOctagon size={20} />
@@ -184,10 +184,10 @@ export default function FindingsListPage() {
         <div className="bg-card rounded-xl p-4 border border-border-subtle shadow-card flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
-              Dispatched to Work Orders
+              Didispatch ke Work Order
             </span>
             <span className="text-2xl font-bold font-display text-pass-ink tabular-nums">{loading ? '…' : String(rows.filter((f) => f.status === 'CONVERTED').length).padStart(2, '0')}</span>
-            <span className="text-xs text-pass-ink font-semibold block mt-0.5">Auto-WO Chain Active</span>
+            <span className="text-xs text-pass-ink font-semibold block mt-0.5">Rantai WO Aktif</span>
           </div>
           <div className="w-10 h-10 rounded-lg bg-pass-bg flex items-center justify-center text-pass">
             <CheckCircle2 size={20} />
@@ -202,23 +202,23 @@ export default function FindingsListPage() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search finding ID, title, asset, or zone…"
+            placeholder="Cari ID temuan, judul, aset, atau zona…"
             className="pl-8 h-9 text-xs"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <span className="text-xs font-semibold text-muted">Criticality:</span>
+          <span className="text-xs font-semibold text-muted">Kekritisan:</span>
           <select
             value={filterSev}
             onChange={(e) => setFilterSev(e.target.value)}
             className="h-9 px-2 border border-border-strong rounded text-xs bg-card"
           >
-            <option value="ALL">All Levels</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
+            <option value="ALL">Semua Level</option>
+            <option value="CRITICAL">Kritis</option>
+            <option value="HIGH">Tinggi</option>
+            <option value="MEDIUM">Sedang</option>
+            <option value="LOW">Rendah</option>
           </select>
         </div>
       </section>
@@ -226,11 +226,11 @@ export default function FindingsListPage() {
       {/* Findings List */}
       <section className="flex flex-col gap-3">
         {loading ? (
-          <p className="text-xs text-muted">Loading findings…</p>
+          <p className="text-xs text-muted">Memuat temuan…</p>
         ) : loadError ? (
           <p role="alert" className="text-xs text-red-600">{loadError}</p>
         ) : filtered.length === 0 ? (
-          <p className="text-xs text-muted">No findings match.</p>
+          <p className="text-xs text-muted">Tidak ada temuan yang cocok.</p>
         ) : null}
         {filtered.map((f) => (
           <div
@@ -256,7 +256,7 @@ export default function FindingsListPage() {
                   {f.severity}
                 </span>
                 <span className="font-mono text-xs text-muted">
-                  from {f.inspectionId} ({f.reportedAt})
+                  dari {f.inspectionId} ({f.reportedAt})
                 </span>
               </div>
 
@@ -269,11 +269,11 @@ export default function FindingsListPage() {
                 <span>•</span>
                 <span>{f.zone}</span>
                 <span>•</span>
-                <span>Inspector: <strong className="text-body">{f.inspector}</strong></span>
+                <span>Inspektor: <strong className="text-body">{f.inspector}</strong></span>
               </div>
 
               <p className="text-xs text-muted font-mono mt-0.5">
-                Action: <span className="text-body font-semibold">{f.actionRequired}</span>
+                Aksi: <span className="text-body font-semibold">{f.actionRequired}</span>
               </p>
             </div>
 
@@ -285,7 +285,7 @@ export default function FindingsListPage() {
                   </span>
                   <Link href={`/work-orders/${f.convertedWo}`}>
                     <Button variant="secondary" className="h-8 px-2.5 text-xs">
-                      View WO <ArrowRight size={12} className="ml-1" />
+                      Lihat WO <ArrowRight size={12} className="ml-1" />
                     </Button>
                   </Link>
                 </div>
@@ -303,7 +303,7 @@ export default function FindingsListPage() {
                         : 'bg-cobalt-deep hover:bg-cobalt text-white'
                     )}
                   >
-                    Triage &amp; Auto-Convert <ArrowRight size={14} />
+                    Triase &amp; Konversi <ArrowRight size={14} />
                   </Button>
                 </Link>
               )}

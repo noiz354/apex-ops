@@ -65,7 +65,7 @@ export function SignupForm({ redirectTo = '/' }: { redirectTo?: string }) {
       if (err instanceof ApiError) {
         setError({ code: err.code, message: err.message });
       } else {
-        setError({ code: 'NETWORK', message: 'Network error — server not reachable.' });
+        setError({ code: 'NETWORK', message: 'Gangguan jaringan — server tidak terjangkau.' });
       }
     } finally {
       setBusy(false);
@@ -82,70 +82,70 @@ export function SignupForm({ redirectTo = '/' }: { redirectTo?: string }) {
       onSubmit={(e) => { e.preventDefault(); submit(); }}
     >
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Create your tenant</h1>
-        <p className="text-[13px] text-muted">Apex Ops CMMS · provision a new organization workspace</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Buat organisasi Anda</h1>
+        <p className="text-[13px] text-muted">Apex Ops CMMS · buat workspace organisasi baru</p>
       </div>
 
       {step === 'form' && (
         <>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" htmlFor="sf-org">Organization Name</label>
+            <label className="text-xs font-semibold" htmlFor="sf-org">Nama Organisasi</label>
             <input id="sf-org" type="text" autoComplete="organization" value={orgName} onChange={(e) => setOrgName(e.target.value)}
               className={inputCls} />
-            {touched && !orgOk && <p className={errCls}>Organization name must be 3–100 characters.</p>}
+            {touched && !orgOk && <p className={errCls}>Nama organisasi wajib 3–100 karakter.</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" htmlFor="sf-name">Admin Full Name</label>
+            <label className="text-xs font-semibold" htmlFor="sf-name">Nama Lengkap Admin</label>
             <input id="sf-name" type="text" autoComplete="name" value={adminName} onChange={(e) => setAdminName(e.target.value)}
               className={inputCls} />
-            {touched && !nameOk && <p className={errCls}>Admin name must be 2–100 characters.</p>}
+            {touched && !nameOk && <p className={errCls}>Nama admin wajib 2–100 karakter.</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" htmlFor="sf-email">Admin Work Email</label>
+            <label className="text-xs font-semibold" htmlFor="sf-email">Email Kerja Admin</label>
             <input id="sf-email" type="email" autoComplete="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)}
               className={inputCls} />
-            {touched && !emailOk && <p className={errCls}>A valid work email is required.</p>}
+            {touched && !emailOk && <p className={errCls}>Email kerja yang valid wajib diisi.</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" htmlFor="sf-pass">Admin Password</label>
+            <label className="text-xs font-semibold" htmlFor="sf-pass">Kata Sandi Admin</label>
             <input id="sf-pass" type="password" autoComplete="new-password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)}
               className={inputCls} />
-            {touched && !passOk && <p className={errCls}>Password must be at least 8 characters.</p>}
+            {touched && !passOk && <p className={errCls}>Kata sandi minimal 8 karakter.</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" htmlFor="sf-title">Admin Title <span className="font-normal text-muted">(optional)</span></label>
+            <label className="text-xs font-semibold" htmlFor="sf-title">Jabatan Admin <span className="font-normal text-muted">(opsional)</span></label>
             <input id="sf-title" type="text" autoComplete="organization-title" value={adminTitle} onChange={(e) => setAdminTitle(e.target.value)}
               className={inputCls} />
-            {touched && !titleOk && <p className={errCls}>Title must be at most 100 characters.</p>}
+            {touched && !titleOk && <p className={errCls}>Jabatan maksimal 100 karakter.</p>}
             {error && <p className={errCls} role="alert">{error.message} ({error.code})</p>}
           </div>
           <Button type="submit" disabled={busy}>
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Building size={16} />}
-            {busy ? 'Provisioning tenant…' : 'Create organization'}
+            {busy ? 'Membuat organisasi…' : 'Buat organisasi'}
           </Button>
         </>
       )}
 
       {step === 'done' && created?.duplicate && (
         <div className="flex flex-col gap-2" role="status">
-          <p className="text-sm font-semibold">Account lookup complete</p>
-          <p className="text-[13px] text-muted">{created.message ?? 'This email may already be registered.'}</p>
-          <a className="text-cobalt hover:underline text-sm font-semibold" href="/login">Sign in →</a>
+          <p className="text-sm font-semibold">Pencarian akun selesai</p>
+          <p className="text-[13px] text-muted">{created.message ?? 'Email ini mungkin sudah terdaftar.'}</p>
+          <a className="text-cobalt hover:underline text-sm font-semibold" href="/login">Masuk →</a>
         </div>
       )}
       {step === 'done' && !created?.duplicate && (
         <div className="flex flex-col gap-2" role="status">
           <p className="text-sm font-semibold text-pass">
-            ✓ Tenant provisioned{created ? ` — ${created.orgName} · ${created.organizationId}` : ''}
+            ✓ Organisasi dibuat{created ? ` — ${created.orgName} · ${created.organizationId}` : ''}
           </p>
-          <p className="text-[11px] text-muted">Session cookie set (httpOnly · 7 days). Redirecting to your dashboard…</p>
+          <p className="text-[11px] text-muted">Cookie sesi diset (httpOnly · 7 hari). Mengalihkan ke dasbor…</p>
         </div>
       )}
 
       <p className="text-[11px] text-muted">
-        Already have a tenant?{' '}
-        <a className="text-cobalt hover:underline" href="/login">Sign in</a>
-        {' '}· Apex Ops CMMS — demo prototype · real provisioning: transactional org + admin + sequences ·{' '}
+        Sudah punya organisasi?{' '}
+        <a className="text-cobalt hover:underline" href="/login">Masuk</a>
+        {' '}· Apex Ops CMMS — prototipe demo · provisioning nyata: org + admin + sequence transaksional ·{' '}
         <a className="text-cobalt hover:underline" href="https://github.com/noiz354/new-dash" target="_blank" rel="noreferrer">repo</a>
       </p>
     </form>

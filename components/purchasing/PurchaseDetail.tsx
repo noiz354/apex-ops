@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, XCircle, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { AuthDialog, DisputeDialog, RejectDialog, RfqDialog, type DisputeKind } from './dialogs';
+import { ToastStack } from '@/components/ui/toast-stack';
+import { useToasts } from '@/lib/use-toasts';
 import type { ServerDoc } from './PurchaseList';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -20,9 +21,6 @@ const TABS: { id: PurchaseTab; label: string }[] = [
   { id: 'match', label: 'Cocok 3-Arah' },
   { id: 'signatures', label: 'Tanda Tangan' },
 ];
-
-interface Toast { id: number; ok: boolean; title: string; msg: string; retry?: boolean }
-let toastSeq = 1;
 
 interface GrnRow {
   number: string;
@@ -42,8 +40,7 @@ const statusTone = (s: string) =>
 export function PurchaseDetail({ initialTab, docId }: { initialTab: PurchaseTab; docId: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<PurchaseTab>(initialTab);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(9000);
   const [doc, setDoc] = useState<ServerDoc | null>(null);
   const [state, setState] = useState<'loading' | 'live' | 'error'>('loading');
   const [loadError, setLoadError] = useState('');
@@ -62,18 +59,6 @@ export function PurchaseDetail({ initialTab, docId }: { initialTab: PurchaseTab;
   interface MatchedInvoice { number: string; poNumber: string; status: string; paymentHold: boolean; invoiceDate: string; createdAt: string }
   const [matched, setMatched] = useState<MatchedInvoice[] | null>(null);
 
-  const push = useCallback((ok: boolean, title: string, msg: string, retry = false) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, msg, retry }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 9000);
-    toastTimers.current.push(timer);
-  }, []);
-
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
-  }, []);
-  const dismiss = (id: number) => setToasts((t) => t.filter((x) => x.id !== id));
   const errMsg = (e: unknown) =>
     e instanceof ApiError ? `${e.message} (${e.code})` : 'Kesalahan tak terduga — tidak ada yang dikirim.';
 
@@ -181,13 +166,12 @@ export function PurchaseDetail({ initialTab, docId }: { initialTab: PurchaseTab;
     if (!doc || busyExport) return;
     setBusyExport(true);
     try {
-      const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+      const { exportTableCsv } = await import('@/lib/csv-export');
       const table: (string | number)[][] = [
         ['sku', 'description', 'quantity', 'unit_price', 'total'],
         ...doc.lineItems.map((l) => [l.sku, l.description, l.quantity, l.priceFormatted, l.totalFormatted]),
       ];
-      const csv = await buildCsvViaWorker(table, ',');
-      await saveAsViaPickerOrDownload(`${doc.number}-lines.csv`, new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+      await exportTableCsv(`${doc.number}-lines.csv`, table);
       push(true, 'Ekspor berhasil', `${doc.lineItems.length} baris → ${doc.number}-lines.csv (data server).`);
     } catch {
       push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
@@ -443,23 +427,17 @@ export function PurchaseDetail({ initialTab, docId }: { initialTab: PurchaseTab;
       </section>
       )}
 
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
-            {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
-            <div className="flex-1">
-              <p className="text-sm font-bold">{t.title}</p>
-              <p className="text-xs">{t.msg}</p>
-              {t.retry && (
-                <button type="button" onClick={() => push(true, 'Retry diantrekan', 'Idempotency-Key sama — tidak duplikat.')} className="mt-1 h-8 px-3 rounded bg-card/60 text-xs font-bold">
-                  Retry
-                </button>
-              )}
-            </div>
-            <button type="button" aria-label="Tutup notifikasi" onClick={() => dismiss(t.id)}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack
+        toasts={toasts}
+        onDismiss={dismiss}
+        action={(t) =>
+          t.retry ? (
+            <button type="button" onClick={() => push(true, 'Retry diantrekan', 'Idempotency-Key sama — tidak duplikat.')} className="mt-1 h-8 px-3 rounded bg-card/60 text-xs font-bold">
+              Retry
+            </button>
+          ) : null
+        }
+      />
     </>
   );
 }

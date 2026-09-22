@@ -1,8 +1,10 @@
 'use client';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Download, Flame, Layers, MapPin, Plus, Printer, RefreshCw, Thermometer, Wind, X, XCircle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardCheck, Download, Flame, Layers, MapPin, Plus, Printer, RefreshCw, Thermometer, Wind } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,15 +52,13 @@ const SEL_BUILDINGS = ['Building A - Corporate HQ', 'Building B - Central Utilit
 const SEL_FLOORS = ['Roof Deck (Cooling Loop)', 'Level 01 (Switchgear Yard)', 'Basement L2 - Heavy Mech Vault', 'Basement L3 - Fire Pumps'] as const;
 const SEL_ROOMS = ['Room #B-201: Generator Vault', 'Room #B-204: Centrifugal Chiller Plant (Active)', 'Room #B-208: Primary Pump Bay', 'Room #B-212: Chemical Dosing'] as const;
 
-interface Toast { id: number; ok: boolean; title: string; msg: string }
-let toastSeq = 1000;
 
 const download = (filename: string, text: string, type = 'application/geo+json') => downloadText(filename, text, type);
 
 export function FacilityHub() {
   const [room, setRoom] = useState('#B-204');
   const [open, setOpen] = useState<Record<string, boolean>>({ campus: true, bldB: true, l2: true });
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { toasts, push, dismiss } = useToasts(8000);
   const [area, setArea] = useState('480');
   const [clearance, setClearance] = useState('5.2');
   const [polyOpen, setPolyOpen] = useState(false);
@@ -84,13 +84,9 @@ export function FacilityHub() {
   const [, setFacCanManage] = useState(false);
   const [posting, setPosting] = useState(false);
 
-  const push = (ok: boolean, title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t, { id, ok, title, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
-  };
 
-  const errMsg = (e: unknown) => (e instanceof ApiError ? `${e.message} (${e.code})` : 'Unexpected error — nothing persisted.');
+
+  const errMsg = (e: unknown) => (e instanceof ApiError ? `${e.message} (${e.code})` : 'Unexpected error — tidak ada yang tersimpan.');
 
   const loadFacilities = async () => {
     try {
@@ -105,10 +101,13 @@ export function FacilityHub() {
 
   useEffect(() => { void loadFacilities(); }, []);
 
-  const canonFacility = facLive ? facilities.find((f) => f.code === CANON_ROOM_CODE) : undefined;
+  const canonFacility = useMemo(
+    () => (facLive ? facilities.find((f) => f.code === CANON_ROOM_CODE) : undefined),
+    [facLive, facilities],
+  );
 
   const toggle = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }));
-  const selRoom = ROOMS.find((r) => r.id === room) ?? ROOMS[1];
+  const selRoom = useMemo(() => ROOMS.find((r) => r.id === room) ?? ROOMS[1], [room]);
 
   const exportGeo = () => {
     if (facLive) {
@@ -135,7 +134,7 @@ export function FacilityHub() {
         note: `${mapped} mapped, ${features.length - mapped} unmapped (geometry: null).`,
         features,
       }, null, 2));
-      push(true, 'Spatial exported', `facility-room-index.geojson · ${features.length} server facilities · ${mapped} mapped, ${features.length - mapped} unmapped.`);
+      push(true, 'Spasial diekspor', `facility-room-index.geojson · ${features.length} fasilitas server · ${mapped} terpetakan, ${features.length - mapped} belum terpetakan.`);
       return;
     }
     const features = ROOMS.map((r) => ({
@@ -150,7 +149,7 @@ export function FacilityHub() {
       },
     }));
     download('basement-l2-spatial.geojson', JSON.stringify({ type: 'FeatureCollection', features }, null, 2));
-    push(true, 'Spatial exported', 'basement-l2-spatial.geojson · 4 rooms · geometries unseeded (properties + grid refs only) · local staging — not persisted.');
+    push(true, 'Spasial diekspor', 'basement-l2-spatial.geojson · 4 ruangan · geometries unseeded (properti + ref grid saja) · local staging — not persisted.');
   };
 
   const savePolygon = () => {
@@ -160,13 +159,13 @@ export function FacilityHub() {
     if (!Number.isFinite(a) || a <= 0 || !Number.isFinite(c) || c <= 0) return;
     setPolyOpen(false);
     setPolyTouched(false);
-    push(true, 'Polygon updated', `Room #B-204 · ${a} m² · clearance ${c}m · local staging — not persisted.`);
+    push(true, 'Poligon diperbarui', `Ruang #B-204 · ${a} m² · clearance ${c}m · staging lokal — tidak tersimpan.`);
   };
 
   const dispatchAudit = () => {
     const n = audits + 1;
     setAudits(n);
-    push(true, 'Room audit logged', `AUD-2026-0${140 + n} (local counter — not persisted) · Room #B-204 · TMPL-HVAC-CHL-02 · crew notify logged (no pager) · local simulation.`);
+    push(true, 'Audit ruangan dicatat', `AUD-2026-0${140 + n} (local counter — not persisted) · Ruang #B-204 · TMPL-HVAC-CHL-02 · kru tercatat (tanpa pager) · simulasi lokal.`);
   };
 
   const addRoom = async () => {
@@ -181,9 +180,9 @@ export function FacilityHub() {
         setAddOpen(false);
         setAddName('');
         setAddTouched(false);
-        push(true, 'Facility created — server', `${f.code} · ${f.name} · id ${f.id} · server-persisted (FACILITY_CREATE).`);
+        push(true, 'Fasilitas dibuat — server', `${f.code} · ${f.name} · id ${f.id} · tersimpan di server (FACILITY_CREATE).`);
       } catch (e) {
-        push(false, 'Facility create failed', errMsg(e));
+        push(false, 'Gagal membuat fasilitas', errMsg(e));
       } finally {
         setPosting(false);
       }
@@ -193,7 +192,7 @@ export function FacilityHub() {
     setAddOpen(false);
     setAddName('');
     setAddTouched(false);
-    push(true, 'Sub-location staged', `${name} · pending GIS survey + BIM binding · local staging — not persisted.`);
+    push(true, 'Sub-lokasi di-staging', `${name} · menunggu survei GIS + binding BIM · staging lokal — tidak tersimpan.`);
   };
 
   const logDefect = async () => {
@@ -210,9 +209,9 @@ export function FacilityHub() {
         setDefOpen(false);
         setDefText('');
         setDefTouched(false);
-        push(true, 'Defect persisted — server', `${f.code} · open server defects: ${f.defects.length} · FACILITY_UPDATE audited.`);
+        push(true, 'Defek tersimpan — server', `${f.code} · defek server terbuka: ${f.defects.length} · FACILITY_UPDATE teraudit.`);
       } catch (e) {
-        push(false, 'Log defect failed', errMsg(e));
+        push(false, 'Gagal mencatat defek', errMsg(e));
       } finally {
         setPosting(false);
       }
@@ -222,7 +221,7 @@ export function FacilityHub() {
     setDefOpen(false);
     setDefText('');
     setDefTouched(false);
-    push(true, 'Defect staged', `Room #B-204 · queued to triage · local staging — not persisted.`);
+    push(true, 'Defek di-staging', `Ruang #B-204 · antre ke triase · staging lokal — tidak tersimpan.`);
   };
 
   const reassign = async () => {
@@ -234,27 +233,27 @@ export function FacilityHub() {
         });
         setFacilities((list) => list.map((x) => (x.code === f.code ? f : x)));
         setReOpen(false);
-        push(true, 'Transfer staged — server', `${f.code} → ${reDest} · ${f.transfers.length} request(s) on record · ledger move not executed.`);
+        push(true, 'Transfer di-staging — server', `${f.code} → ${reDest} · ${f.transfers.length} permintaan tercatat · ledger move belum dieksekusi.`);
       } catch (e) {
-        push(false, 'Reassign failed', errMsg(e));
+        push(false, 'Gagal memindahkan', errMsg(e));
       } finally {
         setPosting(false);
       }
       return;
     }
     setReOpen(false);
-    push(true, 'Transfer staged', `${reAsset} → ${reDest} · pending receiving confirm + ledger move · local staging — not persisted.`);
+    push(true, 'Transfer di-staging', `${reAsset} → ${reDest} · menunggu konfirmasi receiving + ledger move · staging lokal — tidak tersimpan.`);
   };
 
   const selIsB204 = sel.c === 0 && sel.b === 1 && sel.f === 2 && sel.r === 1;
-  const selCounts = sel.r === 1 ? '8 Assets · 2 Open WOs' : sel.r === 0 ? '3 Assets · 1 Open WO' : sel.r === 2 ? '5 Assets · WO queue unseeded' : '2 Assets · WO queue unseeded';
+  const selCounts = sel.r === 1 ? '8 Aset · 2 WO Terbuka' : sel.r === 0 ? '3 Aset · 1 WO Terbuka' : sel.r === 2 ? '5 Aset · antrean WO belum di-seeded' : '2 Assets · WO queue unseeded';
 
   const nodeTone = (t: string) => (t === 'critical' ? 'fail' : t === 'standby' ? 'warn' : 'pass');
 
   return (
     <>
       <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
-        <Link className="text-muted hover:text-cobalt font-medium" href="/">Home</Link>
+        <Link className="text-muted hover:text-cobalt font-medium" href="/">Beranda</Link>
         <span className="text-muted">/</span>
         <span className="text-muted">HQ Campus (Nusantara Tower)</span>
         <span className="text-muted">/</span>
@@ -268,35 +267,35 @@ export function FacilityHub() {
       <section className="bg-card border border-border-subtle rounded-lg p-6 flex flex-col gap-4 shadow-card" aria-labelledby="fac-h">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="apex-id text-muted">Spatial sync: local demo · no broker</p>
+            <p className="apex-id text-muted">Sinkron spasial: demo lokal · tanpa broker</p>
             {facLive === null ? (
-              <p className="apex-id text-muted">Directory: connecting…</p>
+              <p className="apex-id text-muted">Direktori: menghubungkan…</p>
             ) : facLive ? (
-              <p className="apex-id text-pass">Directory: live · server-fed · {facilities.length} facilities</p>
+              <p className="apex-id text-pass">Direktori: live · dari server · {facilities.length} fasilitas</p>
             ) : (
-              <p className="apex-id text-warn">Directory: demo offline — server unreachable · staging stays local</p>
+              <p className="apex-id text-warn">Direktori: demo offline — server tak terjangkau · staging tetap lokal</p>
             )}
-            <h1 id="fac-h" className="text-2xl font-semibold tracking-tight">Facility Locations &amp; Spatial Topology Hub</h1>
-            <p className="text-[13px] text-muted">Multi-tier geospatial asset hierarchy, BIM node coordination, and live mechanical room occupancy.</p>
+            <h1 id="fac-h" className="text-2xl font-semibold tracking-tight">Hub Lokasi Fasilitas & Topologi Spasial</h1>
+            <p className="text-[13px] text-muted">Hierarki aset geospasial multi-tier, koordinasi node BIM, dan okupansi ruang mekanikal.</p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
             <Button variant="secondary" onClick={() => { document.getElementById('spatial-index')?.scrollIntoView({ behavior: 'smooth' }); }}>
-              <MapPin size={16} /> Quick Selector
+              <MapPin size={16} /> Pilih Cepat
             </Button>
-            <Button variant="secondary" onClick={exportGeo}><Download size={16} /> Export GeoJSON / BIM</Button>
+            <Button variant="secondary" onClick={exportGeo}><Download size={16} /> Ekspor GeoJSON / BIM</Button>
             <Dialog open={addOpen} onOpenChange={setAddOpen}>
               <DialogTrigger asChild>
-                <Button><Plus size={16} /> Add Sub-Location / Room</Button>
+                <Button><Plus size={16} /> Tambah Sub-Lokasi / Ruangan</Button>
               </DialogTrigger>
               <DialogContent aria-labelledby="add-h">
-                <DialogTitle id="add-h">Add Sub-Location / Room</DialogTitle>
+                <DialogTitle id="add-h">Tambah Sub-Lokasi / Ruangan</DialogTitle>
                 <DialogDescription>Persists a server facility row when the API is live; otherwise stages locally (toast says which). The tree keeps local entries as STAGED.</DialogDescription>
-                <label className="text-xs font-semibold" htmlFor="add-name">Room label (required)</label>
+                <label className="text-xs font-semibold" htmlFor="add-name">Label ruangan (wajib)</label>
                 <Input id="add-name" value={addName} onChange={(e) => setAddName(e.target.value)} invalid={addTouched && !addName.trim()} placeholder="e.g. #B-216 RO Water Plant" />
-                {addTouched && !addName.trim() && <p className="text-[11px] font-semibold text-fail">A room label is required.</p>}
+                {addTouched && !addName.trim() && <p className="text-[11px] font-semibold text-fail">Label ruangan wajib diisi.</p>}
                 <div className="flex justify-end gap-2">
-                  <Button variant="secondary" onClick={() => setAddOpen(false)}>Cancel</Button>
-                  <Button onClick={() => void addRoom()} disabled={posting}>{posting ? 'Posting…' : facLive ? 'Create (server)' : 'Stage Room'}</Button>
+                  <Button variant="secondary" onClick={() => setAddOpen(false)}>Batal</Button>
+                  <Button onClick={() => void addRoom()} disabled={posting}>{posting ? 'Mengirim…' : facLive ? 'Buat (server)' : 'Stage Ruangan'}</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -305,21 +304,21 @@ export function FacilityHub() {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg border border-border-subtle bg-surface p-3 flex flex-col gap-0.5">
-            <span className="apex-label-caps text-muted">Total Managed Area</span>
+            <span className="apex-label-caps text-muted">Total Area Terkelola</span>
             <span className="text-xl font-semibold tabular-nums">142,500 m²</span>
-            <span className="text-[11px] text-muted">12 Sites · 34 Bldgs · 1,420 Rooms</span>
+            <span className="text-[11px] text-muted">12 Situs · 34 Gedung · 1.420 Ruangan</span>
           </div>
           <div className="rounded-lg border border-border-subtle bg-surface p-3 flex flex-col gap-0.5">
-            <span className="apex-label-caps text-muted">Monitored Zones</span>
-            <span className="text-xl font-semibold tabular-nums">68 Active</span>
-            <span className="text-[11px] text-muted">Nusantara-CUP-B2 in scope · zone tree demo (staged, not synced)</span>
+            <span className="apex-label-caps text-muted">Zona Terpantau</span>
+            <span className="text-xl font-semibold tabular-nums">68 Aktif</span>
+            <span className="text-[11px] text-muted">Nusantara-CUP-B2 dalam scope · zone tree demo (staged, not synced)</span>
           </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           <div id="spatial-index" className="rounded-lg border border-border-subtle bg-surface p-4 flex flex-col gap-2 scroll-mt-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Campus Spatial Index</h2>
+              <h2 className="text-base font-semibold">Indeks Spasial Kampus</h2>
               <Badge variant="info">BIM LOD-350</Badge>
             </div>
             <button type="button" onClick={() => toggle('campus')} className="flex items-center gap-1 text-[13px] font-bold" aria-expanded={open.campus}>
@@ -346,7 +345,7 @@ export function FacilityHub() {
                               <li key={r.id}>
                                 <button
                                   type="button"
-                                  onClick={() => { setRoom(r.id); if (!r.seeded) push(true, 'Structural node', `${r.id} ${r.name} · ${r.counts} · full sensor pack only seeded for #B-204.`); }}
+                                  onClick={() => { setRoom(r.id); if (!r.seeded) push(true, 'Node struktural', `${r.id} ${r.name} · ${r.counts} · paket sensor lengkap hanya di-seed untuk #B-204.`); }}
                                   aria-current={room === r.id ? 'true' : undefined}
                                   className={cn('w-full flex items-center justify-between gap-2 py-1 px-2 rounded text-left', room === r.id ? 'bg-cobalt-tint border border-cobalt-deep font-bold' : 'hover:bg-card border border-transparent')}
                                 >
@@ -371,21 +370,21 @@ export function FacilityHub() {
             )}
             <div className="flex items-center justify-between gap-2 pt-1">
               <p className="text-xs text-muted">GIS calibrated {calibrated}</p>
-              <Button variant="secondary" onClick={() => { setCalibrated('14 Sep 2026 14:05 WIB'); push(true, 'GIS recalibrate — local demo', 'No GIS write · seed counts 12 Sites / 34 Bldgs / 1,420 Rooms are static copy, not measured data.'); }}>
-                <RefreshCw size={14} /> Recalibrate GIS
+              <Button variant="secondary" onClick={() => { setCalibrated('14 Sep 2026 14:05 WIB'); push(true, 'Kalibrasi GIS — demo lokal', 'No GIS write · angka 12 Situs / 34 Gedung / 1.420 Ruangan adalah copy statis, bukan data ukur.'); }}>
+                <RefreshCw size={14} /> Kalibrasi Ulang GIS
               </Button>
             </div>
             {/* GAP-20/F15: real server-persisted facility directory (flat — no
                 fabricated hierarchy claimed here). */}
             <div className="rounded border border-border-subtle bg-card p-3 flex flex-col gap-1.5" aria-labelledby="fac-dir-h">
               <div className="flex items-center justify-between gap-2">
-                <h3 id="fac-dir-h" className="text-[13px] font-bold">Server locations</h3>
+                <h3 id="fac-dir-h" className="text-[13px] font-bold">Lokasi server</h3>
                 {facLive ? <Badge variant="pass">LIVE · SERVER</Badge> : <Badge variant="hold">OFFLINE</Badge>}
               </div>
-              {facLive === null && <p className="text-xs text-muted">Loading facilities…</p>}
-              {facLive === false && <p className="text-xs text-muted">API unreachable — rows below are absent; staging actions stay local and unlabeled above.</p>}
+              {facLive === null && <p className="text-xs text-muted">Memuat fasilitas…</p>}
+              {facLive === false && <p className="text-xs text-muted">API tak terjangkau — baris di bawah kosong; aksi staging tetap lokal.</p>}
               {facLive === true && facilities.length === 0 && (
-                <p className="text-xs text-muted">No facilities persisted yet — create one via <strong>Add Sub-Location / Room</strong>.</p>
+                <p className="text-xs text-muted">Belum ada fasilitas tersimpan — buat via <strong>Tambah Sub-Lokasi / Ruangan</strong>.</p>
               )}
               {facLive === true && facilities.length > 0 && (
                 <ul className="flex flex-col gap-1 text-[13px]">
@@ -410,9 +409,9 @@ export function FacilityHub() {
           <div className="xl:col-span-2 rounded-lg border-2 border-cobalt-deep bg-surface p-4 flex flex-col gap-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="text-base font-semibold">{selRoom.id === '#B-204' ? 'Centrifugal Chiller Plant Room #B-204' : `${selRoom.id} ${selRoom.name}`}</h2>
-                <p className="apex-id text-xs text-muted">{selRoom.id === '#B-204' ? 'LOC-B2-MECH-204 · Zone: Nusantara-CUP-B2' : `${selRoom.counts} · node ID unseeded`}</p>
-                <p className="text-xs text-muted">Building B (Central Utilities Plant) · Level Basement L2 · Grid Coordinates: CUP-G8-X3</p>
+                <h2 className="text-base font-semibold">{selRoom.id === '#B-204' ? 'Ruang Centrifugal Chiller Plant #B-204' : `${selRoom.id} ${selRoom.name}`}</h2>
+                <p className="apex-id text-xs text-muted">{selRoom.id === '#B-204' ? 'LOC-B2-MECH-204 · Zona: Nusantara-CUP-B2' : `${selRoom.counts} · node ID belum di-seed`}</p>
+                <p className="text-xs text-muted">Gedung B (Central Utilities Plant) · Lantai Basement L2 · Koordinat Grid: CUP-G8-X3</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Dialog open={polyOpen} onOpenChange={setPolyOpen}>
@@ -420,7 +419,7 @@ export function FacilityHub() {
                     <Button variant="secondary"><Layers size={16} /> Edit Polygon</Button>
                   </DialogTrigger>
                   <DialogContent aria-labelledby="poly-h">
-                    <DialogTitle id="poly-h">Edit Polygon — Room #B-204</DialogTitle>
+                    <DialogTitle id="poly-h">Ubah Poligon — Ruang #B-204</DialogTitle>
                     <DialogDescription>Floor area + headroom clearance drive the BIM overlay.</DialogDescription>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex flex-col gap-0.5">
@@ -433,16 +432,16 @@ export function FacilityHub() {
                       </div>
                     </div>
                     {polyTouched && (!(parseFloat(area) > 0) || !(parseFloat(clearance) > 0)) && (
-                      <p className="text-[11px] font-semibold text-fail">Area + clearance must be positive numbers.</p>
+                      <p className="text-[11px] font-semibold text-fail">Area + clearance harus angka positif.</p>
                     )}
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" onClick={() => setPolyOpen(false)}>Cancel</Button>
-                      <Button onClick={savePolygon}>Save Polygon</Button>
+                      <Button onClick={savePolygon}>Simpan Poligon</Button>
                     </div>
                   </DialogContent>
                 </Dialog>
-                <Button variant="secondary" onClick={() => window.print()}><Printer size={16} /> Print Badge QR</Button>
-                <Button onClick={dispatchAudit}><ClipboardCheck size={16} /> Dispatch Room Audit{audits > 0 ? ` (${audits})` : ''}</Button>
+                <Button variant="secondary" onClick={() => window.print()}><Printer size={16} /> Cetak QR Badge</Button>
+                <Button onClick={dispatchAudit}><ClipboardCheck size={16} /> Dispatch Audit Ruangan{audits > 0 ? ` (${audits})` : ''}</Button>
               </div>
             </div>
 
@@ -557,7 +556,7 @@ export function FacilityHub() {
                     </g>
                   </svg>
                   <div className="flex flex-wrap items-center gap-2 text-[13px]" role="status">
-                    <Badge variant={nodeTone(NODES[node].tone)}>{NODES[node].tone === 'critical' ? 'Critical Active (1)' : NODES[node].tone === 'standby' ? 'Standby (1)' : 'Nominal (6)'}</Badge>
+                    <Badge variant={nodeTone(NODES[node].tone)}>{NODES[node].tone === 'critical' ? 'Kritis Aktif (1)' : NODES[node].tone === 'standby' ? 'Siaga (1)' : 'Nominal (6)'}</Badge>
                     <span className="apex-id font-bold">{NODES[node].label}</span>
                     <span className="text-muted">· {NODES[node].sub}</span>
                     <span className="apex-id text-xs text-muted ml-auto">Heatmap: R-134a 142 PPM</span>
@@ -567,9 +566,9 @@ export function FacilityHub() {
             ) : (
               <div className="rounded border border-dashed border-border-strong bg-card p-6 text-center flex flex-col gap-1 items-center">
                 <MapPin size={22} className="text-muted" />
-                <p className="text-sm font-semibold">{selRoom.id} {selRoom.name} — structural node</p>
-                <p className="text-[13px] text-muted">{selRoom.counts} · sensor pack, blueprint &amp; WO queue only seeded for #B-204.</p>
-                <Button variant="secondary" onClick={() => setRoom('#B-204')}>Back to #B-204</Button>
+                <p className="text-sm font-semibold">{selRoom.id} {selRoom.name} — node struktural</p>
+                <p className="text-[13px] text-muted">{selRoom.counts} · paket sensor, blueprint &amp; antrean WO hanya di-seed untuk #B-204.</p>
+                <Button variant="secondary" onClick={() => setRoom('#B-204')}>Kembali ke #B-204</Button>
               </div>
             )}
           </div>
@@ -578,78 +577,78 @@ export function FacilityHub() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="rounded-lg border border-border-subtle bg-surface p-4 flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">Installed Assets in Room <span className="text-xs font-normal text-muted">4 Linked</span></h2>
+              <h2 className="text-base font-semibold">Aset Terpasang di Ruangan <span className="text-xs font-normal text-muted">4 Tertaut</span></h2>
               <Dialog open={reOpen} onOpenChange={setReOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="secondary">Reassign / Transfer</Button>
+                  <Button variant="secondary">Pindahkan / Transfer</Button>
                 </DialogTrigger>
                 <DialogContent aria-labelledby="re-h">
-                  <DialogTitle id="re-h">Reassign / Transfer Asset</DialogTitle>
-                  <DialogDescription>Stages a room-to-room move — receiving confirm + ledger move follow.</DialogDescription>
+                  <DialogTitle id="re-h">Pindahkan / Transfer Aset</DialogTitle>
+                  <DialogDescription>Menyiapkan perpindahan antar-ruangan — konfirmasi receiving + ledger move menyusul.</DialogDescription>
                   <label className="text-xs font-semibold" htmlFor="re-asset">Asset</label>
                   <select id="re-asset" value={reAsset} onChange={(e) => setReAsset(e.target.value)} className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card apex-id">
                     {[CANON.assetSeal, 'AST-HVAC-003', 'AST-PUMP-101', 'AST-PUMP-102', 'AST-VALV-042'].map((a) => <option key={a}>{a}</option>)}
                   </select>
-                  <label className="text-xs font-semibold" htmlFor="re-dest">Destination room</label>
+                  <label className="text-xs font-semibold" htmlFor="re-dest">Ruangan tujuan</label>
                   <select id="re-dest" value={reDest} onChange={(e) => setReDest(e.target.value)} className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
                     {['#B-201 Emer Gen Vault', '#B-208 Primary Pump Bay', '#B-212 Chemical Dosing'].map((d) => <option key={d}>{d}</option>)}
                   </select>
                   <div className="flex justify-end gap-2">
                     <Button variant="secondary" onClick={() => setReOpen(false)}>Cancel</Button>
-                    <Button onClick={() => void reassign()} disabled={posting}>{posting ? 'Posting…' : 'Stage Transfer'}</Button>
+                    <Button onClick={() => void reassign()} disabled={posting}>{posting ? 'Mengirim…' : 'Stage Transfer'}</Button>
                   </div>
                 </DialogContent>
               </Dialog>
             </div>
             <table className="w-full text-[13px]">
-              <thead><tr className="text-left text-muted border-b border-border-subtle"><th className="py-1 font-semibold">Asset Tag / Name</th><th className="font-semibold">Classification</th><th className="font-semibold">Operational Status</th><th className="text-right font-semibold">Health Score</th></tr></thead>
+              <thead><tr className="text-left text-muted border-b border-border-subtle"><th className="py-1 font-semibold">Tag / Nama Aset</th><th className="font-semibold">Klasifikasi</th><th className="font-semibold">Status Operasional</th><th className="text-right font-semibold">Skor Kesehatan</th></tr></thead>
               <tbody>
                 <tr className="border-b border-surface-subtle">
                   <td className="py-1.5"><Link className="apex-id font-bold text-cobalt hover:underline" href={`/assets/${CANON.assetSeal}`}>{CANON.assetSeal}</Link><p className="text-xs text-muted">Centrifugal Water Chiller 450-TR</p></td>
-                  <td>Critical Class A</td>
-                  <td><Badge variant="fail">P1 Warning</Badge></td>
+                  <td>Kritis Kelas A</td>
+                  <td><Badge variant="fail">Peringatan P1</Badge></td>
                   <td className="text-right apex-id font-bold text-fail">{CANON.assetHealth}/100 <span className="text-[10px] font-normal">C5 — donut 88 fixed</span></td>
                 </tr>
                 <tr className="border-b border-surface-subtle">
                   <td className="py-1.5"><span className="apex-id font-bold">AST-PUMP-101</span><p className="text-xs text-muted">Primary Chilled Water Pump 75HP</p></td>
                   <td>Standard Class B</td>
-                  <td><Badge variant="pass">Running Nominal</Badge></td>
+                  <td><Badge variant="pass">Berjalan Nominal</Badge></td>
                   <td className="text-right apex-id font-bold">96.8%</td>
                 </tr>
                 <tr className="border-b border-surface-subtle">
                   <td className="py-1.5"><span className="apex-id font-bold">AST-PUMP-102</span><p className="text-xs text-muted">Primary Chilled Water Standby Pump</p></td>
                   <td>Standard Class B</td>
-                  <td><Badge variant="warn">Standby / Ready</Badge></td>
+                  <td><Badge variant="warn">Siaga / Siap</Badge></td>
                   <td className="text-right apex-id font-bold">99.1%</td>
                 </tr>
                 <tr className="border-b border-surface-subtle">
                   <td className="py-1.5"><span className="apex-id font-bold">AST-VALV-042</span><p className="text-xs text-muted">Main Header Motorized Butterfly Valve</p></td>
-                  <td>Safety Critical</td>
-                  <td><Badge variant="pass">Operational</Badge></td>
+                  <td>Kritis Keselamatan</td>
+                  <td><Badge variant="pass">Operasional</Badge></td>
                   <td className="text-right apex-id font-bold">94.2%</td>
                 </tr>
               </tbody>
             </table>
-            <p className="text-xs text-muted">Showing 4 of 8 total mapped assets for Room #B-204 · <Link className="text-cobalt font-semibold hover:underline" href="/assets">View All 8 in Asset Registry →</Link></p>
+            <p className="text-xs text-muted">Menampilkan 4 dari 8 aset terpetakan untuk Ruang #B-204 · <Link className="text-cobalt font-semibold hover:underline" href="/assets">View All 8 in Asset Registry →</Link></p>
           </div>
 
           <div className="flex flex-col gap-4">
             <div className="rounded-lg border border-border-subtle bg-surface p-4 flex flex-col gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-base font-semibold">Active Work Orders &amp; Defects <span className="text-xs font-normal text-muted">{2 + defects.length} Open</span></h2>
+                <h2 className="text-base font-semibold">Work Order &amp; Defek Aktif <span className="text-xs font-normal text-muted">{2 + defects.length} Terbuka</span></h2>
                 <Dialog open={defOpen} onOpenChange={setDefOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="secondary"><Plus size={16} /> Log Defect</Button>
+                    <Button variant="secondary"><Plus size={16} /> Catat Defek</Button>
                   </DialogTrigger>
                   <DialogContent aria-labelledby="def-h">
-                    <DialogTitle id="def-h">Log Defect — Room #B-204</DialogTitle>
-                    <DialogDescription>Queues a room defect to triage (min 10 chars).</DialogDescription>
-                    <label className="text-xs font-semibold" htmlFor="def-text">Defect description</label>
+                    <DialogTitle id="def-h">Catat Defek — Ruang #B-204</DialogTitle>
+                    <DialogDescription>Mengantrekan defek ruangan ke triase (min 10 karakter).</DialogDescription>
+                    <label className="text-xs font-semibold" htmlFor="def-text">Deskripsi defek</label>
                     <textarea id="def-text" rows={3} value={defText} onChange={(e) => setDefText(e.target.value)} className="w-full p-3 border border-border-strong rounded text-[13px] outline-none focus:border-cobalt" placeholder="e.g. Condensate weeping at DN300 return flange…" />
-                    {defTouched && defText.trim().length < 10 && <p className="text-[11px] font-semibold text-fail">Min 10 chars — {10 - defText.trim().length} more needed.</p>}
+                    {defTouched && defText.trim().length < 10 && <p className="text-[11px] font-semibold text-fail">Min 10 karakter — kurang {10 - defText.trim().length} lagi.</p>}
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" onClick={() => setDefOpen(false)}>Cancel</Button>
-                      <Button onClick={() => void logDefect()} disabled={posting}>{posting ? 'Posting…' : 'Queue Defect'}</Button>
+                      <Button onClick={() => void logDefect()} disabled={posting}>{posting ? 'Mengirim…' : 'Antrekan Defek'}</Button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -658,20 +657,20 @@ export function FacilityHub() {
                 <li className="rounded border border-fail bg-card p-3 flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="fail">P1 CRITICAL</Badge>
-                    <span className="apex-id font-bold text-fail">SLA Breach in 42m</span>
+                    <span className="apex-id font-bold text-fail">SLA Terlewati dalam 42 mnt</span>
                   </div>
                   <p><Link className="apex-id font-bold text-cobalt hover:underline" href={`/work-orders/${CANON.workOrderSeal}`}>{CANON.workOrderSeal}</Link> <span className="apex-id text-muted">· {CANON.assetSeal}</span></p>
-                  <p className="font-semibold">Chiller #04 Shaft Seal Refrigerant Leak</p>
-                  <p className="text-muted text-xs">M. Kowalski (HVAC Lead) · <span className="font-bold text-cobalt">In Progress</span></p>
+                  <p className="font-semibold">Kebocoran Refrigeran Shaft Seal Chiller #04</p>
+                  <p className="text-muted text-xs">M. Kowalski (HVAC Lead) · <span className="font-bold text-cobalt">Berjalan</span></p>
                 </li>
                 <li className="rounded border border-border-subtle bg-card p-3 flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="info">P3 ROUTINE</Badge>
-                    <span className="apex-id text-muted">Due Tomorrow 18:00 WIB</span>
+                    <span className="apex-id text-muted">Jatuh tempo Besok 18:00 WIB</span>
                   </div>
                   <p><span className="apex-id font-bold">WO-2026-0881</span> <span className="apex-id text-muted">· AST-VALV-042</span></p>
-                  <p className="font-semibold">Semi-Annual Calibration of Pressure Relief Valve</p>
-                  <p className="text-muted text-xs">Assigned: Shift Delta Team · Scheduled</p>
+                  <p className="font-semibold">Kalibrasi Semesteran Pressure Relief Valve</p>
+                  <p className="text-muted text-xs">Ditugaskan: Tim Shift Delta · Terjadwal</p>
                 </li>
                 {facLive && canonFacility && canonFacility.defects.map((d, i) => (
                   <li key={`srv-${i}`} className="rounded border border-cobalt-deep bg-card p-3 text-[13px]">
@@ -685,14 +684,14 @@ export function FacilityHub() {
                   </li>
                 ))}
               </ul>
-              <p className="text-[13px] text-muted">Audit <span className="apex-id font-bold text-cobalt">{CANON.template}</span> · Completed today at 09:15 UTC · 3/4 passed · <span className="font-bold text-warn">1 Defect</span></p>
+              <p className="text-[13px] text-muted">Audit <span className="apex-id font-bold text-cobalt">{CANON.template}</span> · Selesai hari ini 09:15 UTC · 3/4 lolos · <span className="font-bold text-warn">1 Defek</span></p>
             </div>
 
             <div className="rounded-lg border border-border-subtle bg-surface p-4 flex flex-col gap-2">
-              <h2 className="text-base font-semibold">Universal Cascading Location Selector</h2>
-              <p className="text-[13px] text-muted -mt-1">Global spatial switch for dispatchers, technicians, and telemetry views.</p>
+              <h2 className="text-base font-semibold">Pemilih Lokasi Berjenjang Universal</h2>
+              <p className="text-[13px] text-muted -mt-1">Saklar spasial global untuk dispatcher, teknisi, dan tampilan telemetri.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[13px]">
-                {([['c', 'Level 1: Campus / Site', SEL_CAMPUSES], ['b', 'Level 2: Building / Complex', SEL_BUILDINGS], ['f', 'Level 3: Floor / Spatial Level', SEL_FLOORS], ['r', 'Level 4: Room / Equipment Bay', SEL_ROOMS]] as const).map(([k, label, opts]) => (
+                {([['c', 'Level 1: Kampus / Situs', SEL_CAMPUSES], ['b', 'Level 2: Gedung / Kompleks', SEL_BUILDINGS], ['f', 'Level 3: Lantai / Level Spasial', SEL_FLOORS], ['r', 'Level 4: Ruangan / Bay Peralatan', SEL_ROOMS]] as const).map(([k, label, opts]) => (
                   <div key={k} className="flex flex-col gap-0.5">
                     <label className="text-xs font-semibold" htmlFor={`sel-${k}`}>{label}</label>
                     <select id={`sel-${k}`} value={sel[k]} onChange={(e) => setSel((s) => ({ ...s, [k]: Number(e.target.value) }))} className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
@@ -702,26 +701,18 @@ export function FacilityHub() {
                 ))}
               </div>
               <p className="text-[13px]" role="status">
-                Selected: <strong>{selCounts}</strong> · Node: <strong className="apex-id">{selIsB204 ? 'LOC-B2-MECH-204' : 'unseeded'}</strong>
+                Terpilih: <strong>{selCounts}</strong> · Node: <strong className="apex-id">{selIsB204 ? 'LOC-B2-MECH-204' : 'unseeded'}</strong>
               </p>
               <div className="flex justify-end gap-2">
                 <Button variant="secondary" onClick={() => setSel({ c: 0, b: 1, f: 2, r: 1 })}>Cancel</Button>
-                <Button onClick={() => push(true, 'Spatial filter applied', `${SEL_ROOMS[sel.r]} · ${selCounts} · dashboard views scoped.`)}>Apply Filter Across Dashboard</Button>
+                <Button onClick={() => push(true, 'Filter spasial diterapkan', `${SEL_ROOMS[sel.r]} · ${selCounts} · tampilan dashboard tercakup.`)}>Terapkan Filter ke Dashboard</Button>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
-            {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
-            <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

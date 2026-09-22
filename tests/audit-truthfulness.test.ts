@@ -462,7 +462,7 @@ test('GAP-23 P0/P1/P2: infra/tenant leaks stay absent from remediated surfaces',
   }
 });
 
-test('GAP-23 P1/P2: CSV exports go through the worker builder, never naive quoting', () => {
+test('GAP-24 B2: CSV exports go through the shared exportTableCsv funnel', () => {
   const files = [
     'components/workorders/WorkOrderList.tsx',
     'components/requests/ServiceRequestList.tsx',
@@ -472,14 +472,30 @@ test('GAP-23 P1/P2: CSV exports go through the worker builder, never naive quoti
     'components/purchasing/PurchaseDetail.tsx',
     'components/org/OrgHub.tsx',
     'components/field/FieldInspectionsHub.tsx',
+    'components/inventory/InventoryLedger.tsx',
+    'components/notifications/NotificationsHub.tsx',
+    'components/reports/ReportsHub.tsx',
+    'components/audit/AuditTrail.tsx',
   ];
   for (const rel of files) {
     const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
     assert.ok(
-      body.includes('buildCsvViaWorker'),
-      `${rel} must export CSV via buildCsvViaWorker (quoting/injection-safe)`,
+      body.includes('exportTableCsv'),
+      `${rel} must export CSV via the shared exportTableCsv funnel`,
+    );
+    assert.ok(
+      !body.includes('buildCsvViaWorker') && !body.includes('saveAsViaPickerOrDownload'),
+      `${rel} must not bypass the funnel with direct worker/picker calls`,
     );
   }
+});
+
+test('GAP-24 B2: csv-export lib delegates to the worker builder (quoting/injection-safe)', () => {
+  const body = readFileSync(new URL('../lib/csv-export.ts', import.meta.url).pathname, 'utf8');
+  assert.ok(
+    body.includes('buildCsvViaWorker') && body.includes('saveAsViaPickerOrDownload'),
+    'lib/csv-export must build via buildCsvViaWorker and save via saveAsViaPickerOrDownload',
+  );
 });
 
 test('GAP-23 P0/P1/P2: Indonesian copy present on remediated surfaces', () => {
@@ -504,6 +520,157 @@ test('GAP-23 P0/P1/P2: Indonesian copy present on remediated surfaces', () => {
     ['components/auth/LoginForm.tsx', ['Masuk', 'Lanjut']],
     ['components/org/OrgHub.tsx', ['Tata Kelola Organisasi', 'Ekspor Log Audit', 'Tambah Pengguna']],
     ['components/pm/PmHub.tsx', ['Penjadwalan Preventive Maintenance', 'Buat Rule', 'Semua']],
+  ];
+  for (const [rel, wants] of cases) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    for (const want of wants) {
+      assert.ok(body.includes(want), `${rel} missing Indonesian copy: "${want}"`);
+    }
+  }
+});
+
+test('GAP-24 Fase A: CSV exports on new surfaces go through the shared funnel', () => {
+  const files = [
+    'components/inventory/InventoryLedger.tsx',
+    'components/audit/AuditTrail.tsx',
+    'components/reports/ReportsHub.tsx',
+    'components/notifications/NotificationsHub.tsx',
+  ];
+  for (const rel of files) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    assert.ok(
+      body.includes('exportTableCsv'),
+      `${rel} must export CSV via the shared exportTableCsv funnel`,
+    );
+    assert.ok(
+      !body.includes('buildCsvViaWorker') && !body.includes('saveAsViaPickerOrDownload'),
+      `${rel} must not bypass the funnel with direct worker/picker calls`,
+    );
+  }
+  for (const rel of [
+    'components/inventory/InventoryLedger.tsx',
+    'components/reports/ReportsHub.tsx',
+    'components/notifications/NotificationsHub.tsx',
+  ]) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    assert.ok(!body.includes('downloadText'), `${rel} regressed: still uses naive downloadText CSV`);
+  }
+});
+
+test('GAP-24 Fase B: toast state goes through the shared hook', () => {
+  const hookFiles = [
+    'components/workorders/WorkOrderList.tsx',
+    'components/requests/ServiceRequestList.tsx',
+    'components/requests/ServiceRequestDetail.tsx',
+    'components/vendors/VendorList.tsx',
+    'components/vendors/VendorDetail.tsx',
+    'components/purchasing/PurchaseList.tsx',
+    'components/purchasing/PurchaseDetail.tsx',
+    'components/field/FieldInspectionsHub.tsx',
+    'components/field/FindingDesk.tsx',
+    'components/org/OrgHub.tsx',
+    'components/pm/PmHub.tsx',
+    'components/audit/AuditTrail.tsx',
+    'components/reports/ReportsHub.tsx',
+    'components/notifications/NotificationsHub.tsx',
+    'components/inventory/InventoryLedger.tsx',
+    'components/facilities/FacilityHub.tsx',
+    'components/profile/ProfileSessions.tsx',
+    'components/shifts/ShiftPlan.tsx',
+    'components/settings/SettingsHub.tsx',
+  ];
+  for (const rel of hookFiles) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    assert.ok(
+      body.includes('useToasts') || body.includes('ToastStack'),
+      `${rel} must use the shared toast hook/component`,
+    );
+  }
+  const fieldFiles = [
+    'components/field/RunChecklist.tsx',
+    'components/field/FindingCapture.tsx',
+    'components/field/SyncStatus.tsx',
+    'components/field/AuditQueue.tsx',
+  ];
+  for (const rel of fieldFiles) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    assert.ok(
+      body.includes('useFieldToasts'),
+      `${rel} must use the shared field toast hook`,
+    );
+  }
+});
+
+test('GAP-24 Fase B: no local toast infrastructure remains', () => {
+  const skip = new Set(['lib/use-toasts.ts', 'components/field/toasts.tsx']);
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = `${dir}/${e.name}`;
+      return e.isDirectory() ? walk(p) : [p];
+    });
+  const files = [...walk('components'), ...walk('lib'), ...walk('app')].filter(
+    (f) => (f.endsWith('.tsx') || f.endsWith('.ts')) && !skip.has(f),
+  );
+  for (const f of files) {
+    const body = readFileSync(new URL(`../${f}`, import.meta.url).pathname, 'utf8');
+    for (const gone of ['let toastSeq', 'interface Toast ', 'toastTimers']) {
+      assert.ok(!body.includes(gone), `${f} regressed: local toast infra "${gone}"`);
+    }
+  }
+});
+
+test('GAP-24 Fase B: shared toast lib implements cleanup', () => {
+  const hook = readFileSync(new URL('../lib/use-toasts.ts', import.meta.url).pathname, 'utf8');
+  assert.ok(hook.includes('slice(-2)'), 'useToasts must cap the stack');
+  assert.ok(hook.includes('clearTimeout'), 'useToasts must clear timers on unmount');
+  assert.ok(hook.includes('window.setTimeout'), 'useToasts must track every timer');
+  const stack = readFileSync(
+    new URL('../components/ui/toast-stack.tsx', import.meta.url).pathname,
+    'utf8',
+  );
+  assert.ok(
+    stack.includes("role={t.ok ? 'status' : 'alert'}"),
+    'ToastStack must map ok to status/alert roles',
+  );
+  assert.ok(stack.includes('Tutup notifikasi'), 'ToastStack must label the dismiss button');
+});
+
+test('GAP-24 Fase A: list filtering is memoized', () => {
+  const files = [
+    'components/inventory/InventoryLedger.tsx',
+    'components/notifications/NotificationsHub.tsx',
+    'components/reports/ReportsHub.tsx',
+    'components/facilities/FacilityHub.tsx',
+    'app/(ops)/field/findings/page.tsx',
+    'components/org/OrgHub.tsx',
+    'components/pm/PmHub.tsx',
+    'components/field/SyncStatus.tsx',
+    'components/field/AuditQueue.tsx',
+  ];
+  for (const rel of files) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    assert.ok(body.includes('useMemo'), `${rel} must memoize derived filter lists`);
+  }
+});
+
+test('GAP-24 Fase A: Indonesian copy present on newly remediated surfaces', () => {
+  const cases = [
+    ['components/inventory/InventoryLedger.tsx', ['Inventaris &amp; Ledger Suku Cadang', 'Semua Kategori']],
+    ['components/audit/AuditTrail.tsx', ['Ledger Diekspor', 'Ekspor Log CSV']],
+    ['components/reports/ReportsHub.tsx', ['Hub Laporan &amp; Analitik', 'Buat &amp; Unduh Dossier']],
+    ['components/notifications/NotificationsHub.tsx', ['Ekspor Log (CSV)', 'Log diekspor']],
+    ['components/settings/SettingsHub.tsx', ['Pengaturan &amp; Konfigurasi Sistem', 'Ekspor Bundle']],
+    ['components/vendors/VendorDetail.tsx', ['Kartu Skor Kinerja', 'Dossier vendor tidak tersedia']],
+    ['components/vendors/dialogs.tsx', ['Lihat PDF Tereksekusi', 'Ajukan Amandemen']],
+    ['components/facilities/FacilityHub.tsx', ['Hub Lokasi Fasilitas', 'Tambah Sub-Lokasi']],
+    ['components/profile/ProfileSessions.tsx', ['Profil &amp; Sesi', 'Sesi Aktif']],
+    ['components/assets/AssetBim.tsx', ['Viewport BIM', 'Detail Node']],
+    ['components/ops/CommandPalette.tsx', ['Palet perintah', 'Hasil Pencarian Database']],
+    ['components/org/OrgHub.tsx', ['Matriks direset', 'Klon Policy']],
+    ['components/pm/PmHub.tsx', ['Kalender (Tetap)', 'Kalender Shift']],
+    ['components/shifts/ShiftPlan.tsx', ['Rencana Shift', 'Serah Terima']],
+    ['app/(ops)/field/findings/page.tsx', ['Meja Triase Temuan &amp; Defek', 'Semua Level']],
+    ['components/auth/SignupForm.tsx', ['Buat organisasi Anda', 'Nama Organisasi']],
   ];
   for (const [rel, wants] of cases) {
     const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');

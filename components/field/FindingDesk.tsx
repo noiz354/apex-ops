@@ -1,17 +1,16 @@
 'use client';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Camera, CheckCircle2, X, XCircle } from 'lucide-react';
+import { Camera } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
 
 type Busy = null | 'convert' | 'dismiss' | 'pm';
 
-interface Toast { id: number; ok: boolean; title: string; msg: string }
-let toastSeq = 100;
 
 interface LiveFinding { status: 'OPEN' | 'CONVERTED' | 'DISMISSED'; convertedWoNumber: string | null }
 
@@ -37,8 +36,7 @@ const OTHERS = [
 ];
 
 export function FindingDesk() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(9000);
   const [loto, setLoto] = useState(false);
   const [live, setLive] = useState<LiveFinding | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -46,12 +44,6 @@ export function FindingDesk() {
   const [dismissOpen, setDismissOpen] = useState(false);
   const [reason, setReason] = useState('');
 
-  const push = (ok: boolean, title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 9000);
-    toastTimers.current.push(timer);
-  };
 
   const refreshLive = async () => {
     const data = await api<{ rows: (LiveFinding & { number: string })[] }>('/api/findings');
@@ -62,10 +54,6 @@ export function FindingDesk() {
 
   useEffect(() => {
     refreshLive().catch((e: Error) => setLiveError(e.message));
-  }, []);
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
   }, []);
 
   const converted = live?.status === 'CONVERTED';
@@ -343,15 +331,7 @@ export function FindingDesk() {
         </div>
       </section>
 
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
-            {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
-            <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

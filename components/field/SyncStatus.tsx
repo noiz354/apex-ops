@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CloudUpload, SignalLow, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,12 +52,12 @@ export function SyncStatus() {
     };
   }, [refresh, push]);
 
-  const pendingItems = items.filter((i) => i.status !== 'SYNCED' && i.status !== 'EXPIRED');
-  const syncedItems = items.filter((i) => i.status === 'SYNCED').slice(-5).reverse();
-  const expiredItems = items.filter((i) => i.status === 'EXPIRED');
-  const oldest = pendingItems
+  const pendingItems = useMemo(() => items.filter((i) => i.status !== 'SYNCED' && i.status !== 'EXPIRED'), [items]);
+  const syncedItems = useMemo(() => items.filter((i) => i.status === 'SYNCED').slice(-5).reverse(), [items]);
+  const expiredItems = useMemo(() => items.filter((i) => i.status === 'EXPIRED'), [items]);
+  const oldest = useMemo(() => pendingItems
     .map((i) => new Date(i.createdAt).getTime())
-    .sort((a, b) => a - b)[0];
+    .sort((a, b) => a - b)[0], [pendingItems]);
 
   const retry = async (item: OutboxItem) => {
     if (busyId || item.status === 'SENDING') return;

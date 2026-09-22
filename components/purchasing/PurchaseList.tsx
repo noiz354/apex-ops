@@ -1,14 +1,15 @@
 'use client';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 
-import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Download, LoaderCircle, Plus, X, XCircle } from 'lucide-react';
+import { Download, LoaderCircle, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { TableSkeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 import { ApiError, apiFetch } from '@/lib/api/client';
 
 interface ServerLine {
@@ -65,8 +66,6 @@ function toDoc(d: ServerDoc): Doc {
   };
 }
 
-interface Toast { id: number; ok: boolean; title: string; msg: string }
-let toastSeq = 1800;
 
 const fmtUsd = (c: number) => `$${(c / 100).toFixed(2)}`;
 
@@ -77,8 +76,7 @@ export function PurchaseList() {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('Semua Jenis');
   const [status, setStatus] = useState('Semua Status');
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(8000);
   const [busyExport, setBusyExport] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [nwTitle, setNwTitle] = useState('');
@@ -89,17 +87,7 @@ export function PurchaseList() {
   const [nwTouched, setNwTouched] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const push = (ok: boolean, title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
-    toastTimers.current.push(timer);
-  };
 
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
-  }, []);
 
   const errMsg = (e: unknown) =>
     e instanceof ApiError ? `${e.message} (${e.code})` : 'Kesalahan tak terduga — tidak ada yang dikirim.';
@@ -143,13 +131,12 @@ export function PurchaseList() {
     if (busyExport) return;
     setBusyExport(true);
     try {
-    const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+    const { exportTableCsv } = await import('@/lib/csv-export');
     const table: (string | number)[][] = [
       ['id', 'type', 'title', 'vendor', 'amount', 'requestor', 'status'],
       ...filtered.map((r) => [r.id, r.kind, r.title, r.vendor, r.amount, r.req, r.status]),
     ];
-    const csv = await buildCsvViaWorker(table, ',');
-    await saveAsViaPickerOrDownload('purchasing-documents.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+    await exportTableCsv('purchasing-documents.csv', table);
     push(true, 'Ekspor berhasil', `${filtered.length} dokumen → purchasing-documents.csv (${live ? 'data server' : 'data demo — server tidak terjangkau'}).`);
     } catch {
       push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
@@ -340,15 +327,7 @@ export function PurchaseList() {
         <p className="text-xs text-muted" role="status">Menampilkan {filtered.length} dari {rows.length} dokumen {live ? '' : '(demo)'}.</p>
       </section>
 
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
-            {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
-            <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Tutup notifikasi" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

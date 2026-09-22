@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, CheckCircle2, Printer, X } from 'lucide-react';
+import { BadgeCheck, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/alert-dialog';
 import { CANON } from '@/lib/canon';
-import { cn } from '@/lib/utils';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 
 interface LiveSession {
   idHashPrefix: string;
@@ -26,9 +27,6 @@ interface ApiKey {
   createdAt: string;
 }
 
-interface Toast { id: number; title: string; msg: string }
-let toastSeq = 500;
-
 function fmtDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -40,20 +38,16 @@ function fmtDate(iso: string): string {
 export function ProfileSessions() {
   const [sessions, setSessions] = useState<LiveSession[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [sessState, setSessState] = useState('Loading live sessions…');
+  const [sessState, setSessState] = useState('Memuat sesi live…');
   const [busy, setBusy] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [keys, setKeys] = useState<ApiKey[] | null>(null);
   const [keysError, setKeysError] = useState<string | null>(null);
   const [keyName, setKeyName] = useState('');
   const [freshSecret, setFreshSecret] = useState<{ id: string; secret: string } | null>(null);
   const [keyBusy, setKeyBusy] = useState(false);
 
-  const push = (title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t, { id, title, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000);
-  };
+  const { toasts, push: basePush, dismiss } = useToasts(7000);
+  const push = (title: string, msg: string) => basePush(true, title, msg);
 
   const refresh = useCallback(async () => {
     setLoadError(null);
@@ -68,14 +62,14 @@ export function ProfileSessions() {
       const others = rows.filter((r) => !r.current).length;
       setSessState(
         rows.length === 0
-          ? 'No active sessions found (unexpected — you are signed in).'
-          : `${rows.length} active session${rows.length === 1 ? '' : 's'} · ${others} other device${others === 1 ? '' : 's'} · per-session revoke unavailable (hash prefixes only).`,
+          ? 'Tidak ada sesi aktif (janggal — Anda sedang masuk).'
+          : `${rows.length} sesi aktif · ${others} perangkat lain · revoke per-sesi tidak tersedia (hanya prefix hash).`,
       );
     } catch (err) {
       setSessions(null);
       const msg = err instanceof Error ? err.message : String(err);
-      setLoadError(`Could not load sessions: ${msg}`);
-      setSessState('Session list unavailable — actions disabled until the server responds.');
+      setLoadError(`Gagal memuat sesi: ${msg}`);
+      setSessState('Daftar sesi tidak tersedia — aksi dinonaktifkan sampai server merespons.');
     }
   }, []);
 
@@ -104,7 +98,7 @@ export function ProfileSessions() {
 
   const issueKey = async () => {
     if (!keyName.trim()) {
-      push('Key name required', 'Give the key a name (e.g. "scada-exporter") before issuing.');
+      push('Nama kunci wajib', 'Beri nama kunci (mis. "scada-exporter") sebelum diterbitkan.');
       return;
     }
     setKeyBusy(true);
@@ -121,10 +115,10 @@ export function ProfileSessions() {
       }
       setFreshSecret({ id: body.data.id, secret: body.data.secret });
       setKeyName('');
-      push('API key issued', `${body.data.id} created — copy the secret now, it will never be shown again.`);
+      push('Kunci API diterbitkan', `${body.data.id} dibuat — salin secret sekarang, tidak akan ditampilkan lagi.`);
       await refreshKeys();
     } catch (err) {
-      push('Issue failed', err instanceof Error ? err.message : String(err));
+      push('Penerbitan gagal', err instanceof Error ? err.message : String(err));
     } finally {
       setKeyBusy(false);
     }
@@ -141,10 +135,10 @@ export function ProfileSessions() {
       if (!res.ok || !body?.ok) {
         throw new Error(body?.error?.code ? `${body.error.code}: ${body.error.message}` : `HTTP ${res.status}`);
       }
-      push('API key revoked', `${id} can no longer authenticate.`);
+      push('Kunci API dicabut', `${id} tidak bisa lagi autentikasi.`);
       await refreshKeys();
     } catch (err) {
-      push('Revoke failed', err instanceof Error ? err.message : String(err));
+      push('Pencabutan gagal', err instanceof Error ? err.message : String(err));
     } finally {
       setKeyBusy(false);
     }
@@ -164,11 +158,11 @@ export function ProfileSessions() {
         throw new Error(body?.error?.code ? `${body.error.code}: ${body.error.message}` : `HTTP ${res.status}`);
       }
       const n: number = body.data.revokedCount ?? 0;
-      setSessState(`Signed out ${n} other device${n === 1 ? '' : 's'} · this device stays signed in.`);
-      push('Other sessions revoked', `${n} device(s) signed out.`);
+      setSessState(`Keluar dari ${n} perangkat lain · perangkat ini tetap masuk.`);
+      push('Sesi lain dicabut', `${n} perangkat keluar.`);
       await refresh();
     } catch (err) {
-      push('Revoke failed', err instanceof Error ? err.message : String(err));
+      push('Pencabutan gagal', err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -189,7 +183,7 @@ export function ProfileSessions() {
       }
       window.location.href = '/login';
     } catch (err) {
-      push('Sign-out-all failed', err instanceof Error ? err.message : String(err));
+      push('Keluar semua gagal', err instanceof Error ? err.message : String(err));
       setBusy(false);
     }
   };
@@ -202,7 +196,7 @@ export function ProfileSessions() {
         <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
           <Link className="text-muted hover:text-cobalt font-medium" href={`/work-orders/${CANON.workOrderSeal}`}>{CANON.workOrderSeal}</Link>
           <span className="text-muted">/</span>
-          <span className="font-semibold text-xl tracking-tight">Profile &amp; Sessions</span>
+          <span className="font-semibold text-xl tracking-tight">Profil &amp; Sesi</span>
         </nav>
 
         <section className="bg-card border border-border-subtle rounded-lg p-5 flex flex-wrap items-center gap-4" aria-label="Identity">
@@ -210,49 +204,49 @@ export function ProfileSessions() {
           <div className="flex-1 min-w-[200px]">
             <h2 className="text-lg font-semibold">{CANON.sessionUser}</h2>
             <p className="text-sm text-muted">{CANON.sessionRole} · <span className="apex-id">{CANON.sessionEmail}</span> · RFID-7714</p>
-            <p className="text-sm text-muted">Role: <strong className="text-ink">Ops Admin</strong> (1 of {CANON.roles} Roles) · Shift A · Tenant {CANON.tenant}</p>
+            <p className="text-sm text-muted">Peran: <strong className="text-ink">Ops Admin</strong> (1 dari {CANON.roles} Peran) · Shift A · Tenant {CANON.tenant}</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <Link href="/badges/RFID-7714/print">
               <Button variant="secondary">
-                <Printer size={16} /> Print Badge (CR80)
+                <Printer size={16} /> Cetak Badge (CR80)
               </Button>
             </Link>
             <Button variant="secondary" onClick={() => window.print()}>
-              <BadgeCheck size={16} /> Quick Print
+              <BadgeCheck size={16} /> Cetak Cepat
             </Button>
             <Link href="/organization">
-              <Button variant="secondary">Open Org &amp; RBAC</Button>
+              <Button variant="secondary">Buka Org &amp; RBAC</Button>
             </Link>
           </div>
         </section>
 
         <section className="bg-card border border-border-subtle rounded-lg p-5 flex flex-col gap-3" aria-labelledby="sess-h">
           <div className="flex items-center justify-between">
-            <h2 id="sess-h" className="font-semibold">Active Sessions</h2>
-            <span className="text-xs text-muted">Live server sessions · MFA: real TOTP</span>
+            <h2 id="sess-h" className="font-semibold">Sesi Aktif</h2>
+            <span className="text-xs text-muted">Sesi server live · MFA: TOTP asli</span>
           </div>
           {loadError ? (
             <p className="text-sm rounded border border-fail bg-fail-bg text-fail-ink p-3" role="alert">
               {loadError}
             </p>
           ) : sessions === null ? (
-            <p className="text-sm text-muted" role="status">Loading sessions…</p>
+            <p className="text-sm text-muted" role="status">Memuat sesi…</p>
           ) : sessions.length === 0 ? (
-            <p className="text-sm text-muted" role="status">No active sessions found.</p>
+            <p className="text-sm text-muted" role="status">Tidak ada sesi aktif.</p>
           ) : (
             <ul className="flex flex-col divide-y divide-surface-subtle text-sm">
               {sessions.map((s) => (
                 <li key={s.idHashPrefix} className="py-2 flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    <strong className="apex-id">sess:{s.idHashPrefix}</strong> · {s.userAgent ?? 'unknown device'}{' '}
-                    {s.current && <span className="text-xs text-pass font-bold">THIS DEVICE</span>}
-                    <span className="block text-xs text-muted">last seen {fmtDate(s.lastSeenAt)} · expires {fmtDate(s.expiresAt)}</span>
+                    <strong className="apex-id">sess:{s.idHashPrefix}</strong> · {s.userAgent ?? 'perangkat tak dikenal'}{' '}
+                    {s.current && <span className="text-xs text-pass font-bold">PERANGKAT INI</span>}
+                    <span className="block text-xs text-muted">terakhir terlihat {fmtDate(s.lastSeenAt)} · kedaluwarsa {fmtDate(s.expiresAt)}</span>
                   </span>
                   {s.current ? (
-                    <span className="text-xs text-muted">protected</span>
+                    <span className="text-xs text-muted">dilindungi</span>
                   ) : (
-                    <span className="text-xs text-muted">use “Sign out other devices” below</span>
+                    <span className="text-xs text-muted">gunakan “Keluar dari perangkat lain” di bawah</span>
                   )}
                 </li>
               ))}
@@ -261,9 +255,9 @@ export function ProfileSessions() {
           <p className="text-xs text-muted" role="status">{sessState}</p>
           <div className="flex flex-wrap gap-2">
             <ConfirmDialog
-              title="Sign out other devices?"
-              description={`${others} other session(s) will be signed out immediately. This device stays signed in. Field drafts stay in each device's local outbox.`}
-              confirmLabel="Sign Out Others"
+              title="Keluar dari perangkat lain?"
+              description={`${others} sesi lain akan segera keluar. Perangkat ini tetap masuk. Draf lapangan tetap di outbox lokal tiap perangkat.`}
+              confirmLabel="Keluarkan Lainnya"
               onConfirm={() => revokeOthers()}
             >
               <button
@@ -271,13 +265,13 @@ export function ProfileSessions() {
                 disabled={busy || sessions === null || others === 0}
                 className="h-8 px-3 rounded bg-fail-bg text-fail border border-[#FECACA] text-xs font-bold hover:bg-fail hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign Out Other Devices
+                Keluarkan Perangkat Lain
               </button>
             </ConfirmDialog>
             <ConfirmDialog
-              title="Sign out ALL devices?"
-              description="Every session including this device is revoked and you return to the login screen."
-              confirmLabel="Sign Out Everywhere"
+              title="Keluar dari SEMUA perangkat?"
+              description="Semua sesi termasuk perangkat ini dicabut dan Anda kembali ke layar masuk."
+              confirmLabel="Keluar di Semua Tempat"
               onConfirm={() => revokeAll()}
             >
               <button
@@ -285,23 +279,23 @@ export function ProfileSessions() {
                 disabled={busy || sessions === null}
                 className="h-8 px-3 rounded border border-border-subtle text-xs font-bold text-muted hover:text-fail disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign Out Everywhere
+                Keluar di Semua Tempat
               </button>
             </ConfirmDialog>
           </div>
         </section>
 
         <section className="bg-card border border-border-subtle rounded-lg p-5 flex flex-col gap-3" aria-label="API access">
-          <h2 className="font-semibold">API Access</h2>
+          <h2 className="font-semibold">Akses API</h2>
           <p className="text-sm text-muted">
-            Programmatic keys are issued and revoked here — the server stores
-            only hashes, so a secret is shown once at creation and never again.
-            Bearer enforcement at the API gateway lands in a follow-up slice;
-            lifecycle (issue / revoke) is live.
+            Kunci programmatic diterbitkan dan dicabut di sini — server hanya menyimpan
+            hash, jadi secret ditampilkan sekali saat dibuat dan tidak pernah lagi.
+            Enforcement bearer di API gateway menyusul;
+            lifecycle (terbit / cabut) live.
           </p>
           {keysError && (
             <p className="text-[12px] font-semibold text-fail bg-fail-bg rounded px-2 py-1" role="alert">
-              Could not load API keys: {keysError}
+              Gagal memuat kunci API: {keysError}
             </p>
           )}
           {keys !== null && keys.length > 0 && (
@@ -310,12 +304,12 @@ export function ProfileSessions() {
                 <li key={k.id} className="flex items-center justify-between gap-2 rounded border border-border-subtle px-2 py-1.5">
                   <span className="min-w-0">
                     <strong className="apex-id">{k.id}</strong> · {k.name} · <span className="apex-id">…{k.last4}</span>
-                    <span className="block text-[11px] text-muted apex-id">issued {fmtDate(k.createdAt)}</span>
+                    <span className="block text-[11px] text-muted apex-id">diterbitkan {fmtDate(k.createdAt)}</span>
                   </span>
                   <ConfirmDialog
-                    title={`Revoke ${k.id}?`}
-                    description="The key stops authenticating immediately. This cannot be undone — issue a new key if access is still needed."
-                    confirmLabel="Revoke Key"
+                    title={`Cabut ${k.id}?`}
+                    description="Kunci berhenti autentikasi segera. Ini tidak bisa dibatalkan — terbitkan kunci baru bila akses masih dibutuhkan."
+                    confirmLabel="Cabut Kunci"
                     onConfirm={() => revokeKey(k.id)}
                   >
                     <button
@@ -323,7 +317,7 @@ export function ProfileSessions() {
                       disabled={keyBusy}
                       className="h-8 px-3 rounded border border-border-subtle text-xs font-bold text-muted hover:text-fail disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Revoke
+                      Cabut
                     </button>
                   </ConfirmDialog>
                 </li>
@@ -331,18 +325,18 @@ export function ProfileSessions() {
             </ul>
           )}
           {keys !== null && keys.length === 0 && (
-            <p className="text-[13px] text-muted" role="status">No active API keys.</p>
+            <p className="text-[13px] text-muted" role="status">Tidak ada kunci API aktif.</p>
           )}
           {freshSecret && (
             <div className="rounded border border-warn bg-warn-bg p-3 text-[13px]" role="alert">
-              <p className="font-bold">Copy this secret now — it will never be shown again.</p>
+              <p className="font-bold">Salin secret ini sekarang — tidak akan ditampilkan lagi.</p>
               <p className="apex-id break-all font-mono mt-1">{freshSecret.secret}</p>
               <button
                 type="button"
                 className="mt-2 h-8 px-3 rounded border border-border-subtle text-xs font-bold"
                 onClick={() => setFreshSecret(null)}
               >
-                I saved it — hide
+                Sudah disimpan — sembunyikan
               </button>
             </div>
           )}
@@ -351,16 +345,16 @@ export function ProfileSessions() {
               type="text"
               value={keyName}
               onChange={(e) => setKeyName(e.target.value)}
-              placeholder="Key name (e.g. scada-exporter)"
+              placeholder="Nama kunci (mis. scada-exporter)"
               maxLength={80}
-              aria-label="New API key name"
+              aria-label="Nama kunci API baru"
               className="h-9 flex-1 min-w-[200px] rounded border border-border-subtle bg-surface px-3 text-sm"
             />
             <Button variant="secondary" onClick={() => void issueKey()} disabled={keyBusy}>
-              {keyBusy ? '…' : 'Generate New Key'}
+              {keyBusy ? '…' : 'Buat Kunci Baru'}
             </Button>
             <Link href="/settings">
-              <Button variant="secondary">Open Settings</Button>
+              <Button variant="secondary">Buka Pengaturan</Button>
             </Link>
           </div>
         </section>
@@ -379,18 +373,18 @@ export function ProfileSessions() {
               title="Requires a server-issued impersonation session (not available in this build)"
               className="h-9 px-4 rounded bg-surface border border-border-subtle text-sm font-bold text-muted cursor-not-allowed"
             >
-              Impersonate Field Tech (disabled)
+              Impersonasi Field Tech (nonaktif)
             </button>
             <Link href="/audit-trail" className="h-9 px-4 rounded bg-cobalt-tint text-sm font-semibold inline-flex items-center">
-              Open Audit Trail
+              Buka Audit Trail
             </Link>
           </div>
         </section>
       </div>
 
       {/* L3: badge print view — screen-hidden, print-only */}
-      <section className="only-print p-8 bg-white text-black flex-col items-center gap-2 text-center" aria-label="Badge print view">
-        <svg className="h-10 w-auto" viewBox="0 0 160 40" fill="none" role="img" aria-label="Apex Ops logo">
+      <section className="only-print p-8 bg-white text-black flex-col items-center gap-2 text-center" aria-label="Tampilan cetak badge">
+        <svg className="h-10 w-auto" viewBox="0 0 160 40" fill="none" role="img" aria-label="Logo Apex Ops">
           <rect width="36" height="36" rx="8" fill="#1E40AF" />
           <path d="M18 8L27 24H9L18 8Z" stroke="#60A5FA" strokeWidth="2.5" strokeLinejoin="round" />
           <circle cx="18" cy="20" r="2.5" fill="#FFFFFF" />
@@ -399,7 +393,7 @@ export function ProfileSessions() {
         </svg>
         <h2 className="text-xl font-bold">{CANON.sessionUser}</h2>
         <p className="text-sm">{CANON.sessionRole} · RFID-7714 · {CANON.tenant}</p>
-        <svg width="120" height="120" viewBox="0 0 25 25" role="img" aria-label="Badge QR code">
+        <svg width="120" height="120" viewBox="0 0 25 25" role="img" aria-label="QR code badge">
           <rect width="25" height="25" fill="#fff" />
           <g fill="#000">
             <rect x="1" y="1" width="7" height="7" /><rect x="3" y="3" width="3" height="3" fill="#fff" />
@@ -416,15 +410,7 @@ export function ProfileSessions() {
         <p className="text-xs font-mono">SK · RFID-7714 · Shift A · {CANON.shiftA}</p>
       </section>
 
-      <div className="no-print fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role="status" className={cn('rounded-lg shadow-modal p-3 flex gap-2 items-start text-sm bg-pass-bg border border-pass text-pass-ink')}>
-            <CheckCircle2 size={20} className="shrink-0" />
-            <div className="flex-1"><p className="font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} className="no-print" />
     </>
   );
 }

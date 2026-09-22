@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Download, LoaderCircle, Plus } from 'lucide-react';
@@ -10,12 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ApiError, apiFetch } from '@/lib/api/client';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 import type { WoRow } from '@/lib/services/wo-service';
 
 interface Tech { name: string; email: string; role: string }
-
-interface Toast { id: number; ok: boolean; title: string; detail: string }
-let toastSeq = 1;
 
 function statusTone(r: WoRow): 'pass' | 'warn' | 'fail' | 'info' | 'hold' {
   if (r.slaLabel.includes('BREACH')) return 'fail';
@@ -42,8 +41,7 @@ export function WorkOrderList({
   const [status, setStatus] = useState('Semua Status');
   const [pri, setPri] = useState('Semua Prioritas');
   const [vintage, setVintage] = useState('Semua Tahun');
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(6000);
 
   const [newOpen, setNewOpen] = useState(false);
   const [nwTitle, setNwTitle] = useState('');
@@ -56,19 +54,6 @@ export function WorkOrderList({
 
   const [reWO, setReWO] = useState<WoRow | null>(null);
   const [reEmail, setReEmail] = useState(techs[0]?.email ?? '');
-
-  const push = (ok: boolean, title: string, detail: string) => {
-    toastSeq += 1;
-    const id = toastSeq;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, detail }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
-    toastTimers.current.push(timer);
-  };
-
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
-  }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -97,13 +82,12 @@ export function WorkOrderList({
     if (busyExport) return;
     setBusyExport(true);
     try {
-      const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+      const { exportTableCsv } = await import('@/lib/csv-export');
       const table: (string | number)[][] = [
         ['number', 'title', 'location', 'priority', 'status', 'sla', 'assignee'],
         ...filtered.map((r) => [r.number, r.title, r.location, r.priority, r.statusLabel, r.slaLabel, r.tech ?? '']),
       ];
-      const csv = await buildCsvViaWorker(table, ',');
-      await saveAsViaPickerOrDownload('work-orders-pipeline.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+      await exportTableCsv('work-orders-pipeline.csv', table);
       push(true, 'Ekspor berhasil', `${filtered.length} work order → work-orders-pipeline.csv (baris yang difilter).`);
     } catch {
       push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
@@ -313,17 +297,7 @@ export function WorkOrderList({
         </DialogContent>
       </Dialog>
 
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg border p-3 shadow-card text-[13px] flex items-start gap-2', t.ok ? 'bg-pass-bg border-pass' : 'bg-fail-bg border-fail')}>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold">{t.ok ? '✓' : '✕'} {t.title}</p>
-              <p className="text-muted">{t.detail}</p>
-            </div>
-            <button type="button" aria-label="Tutup notifikasi" className="text-muted hover:text-ink shrink-0" onClick={() => setToasts((xs) => xs.filter((x) => x.id !== t.id))}>✕</button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

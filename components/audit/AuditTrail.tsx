@@ -25,8 +25,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Terminal,
-  X,
-  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +36,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 import { downloadText } from '@/lib/download';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import { useWindow } from '@/lib/ui/useWindow';
@@ -47,14 +47,6 @@ import type { AuditRow, HashChainVerificationResult } from '@/lib/services/audit
 type Sev = 'Critical' | 'Notice' | 'Info';
 type ViewMode = 'diff' | 'raw';
 
-interface Toast {
-  id: number;
-  ok: boolean;
-  title: string;
-  msg: string;
-}
-
-let toastSeq = 2000;
 
 function severityOf(action: string): Sev {
   if (/FAIL|LOCKED|REJECT|BREACH|CRITICAL|ALERT|SUSPEND/.test(action.toUpperCase())) return 'Critical';
@@ -452,7 +444,7 @@ export function AuditTrail({
   const [flagReason, setFlagReason] = useState('Suspicious Privilege Escalation');
   const [flagNotes, setFlagNotes] = useState('');
 
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { toasts, push, dismiss, defer } = useToasts(6000);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const allEvents: ProcessedEvent[] = useMemo(() => {
@@ -480,12 +472,7 @@ export function AuditTrail({
     return () => document.removeEventListener('keydown', hot);
   }, []);
 
-  const push = (ok: boolean, title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t, { id, ok, title, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
-  };
-
+  
   const entities = useMemo(
     () => Array.from(new Set(allEvents.map((r) => r.entityId).filter(Boolean))),
     [allEvents]
@@ -551,41 +538,41 @@ export function AuditTrail({
   const copyHash = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedHash(true);
-    push(true, 'Entry Hash Copied', 'Server-recorded chain hash copied to clipboard.');
-    setTimeout(() => setCopiedHash(false), 2000);
+    push(true, 'Hash Entri Disalin', 'Hash chain tercatat-server disalin ke clipboard.');
+    defer(() => setCopiedHash(false), 2000);
   };
 
   const triggerRefetch = () => {
     setRefetching(true);
     router.refresh();
-    setTimeout(() => {
+    defer(() => {
       setRefetching(false);
-      push(true, 'Activity Feed Re-fetched', 'Latest server ledger rows reloaded into this view.');
+      push(true, 'Feed Dimuat Ulang', 'Baris ledger server terbaru dimuat ke tampilan ini.');
     }, 650);
   };
 
-  const exportLog = () => {
-    if (format === 'csv') {
-      const head = 'id,utc,action,entity_type,entity_id,actor,severity,hash,request_id';
-      const body = filtered.map((e) =>
-        [
-          e.id,
-          `"${fmtTs(e.ts)}"`,
-          `"${e.action}"`,
-          `"${e.entityType}"`,
-          `"${e.entityId}"`,
-          `"${e.actorName}"`,
-          severityOf(e.action),
-          `"${e.hash ?? ''}"`,
-          `"${e.requestId ?? ''}"`,
-        ].join(',')
-      );
-      downloadFile('audit-ledger.csv', [head, ...body].join('\n'), 'text/csv');
-    } else {
-      downloadFile('audit-ledger.json', JSON.stringify(filtered, null, 2), 'application/json');
+  const [busyExport, setBusyExport] = useState(false);
+  const exportLog = async () => {
+    if (busyExport) return;
+    setBusyExport(true);
+    try {
+      if (format === 'csv') {
+        const { exportTableCsv } = await import('@/lib/csv-export');
+        const table: (string | number)[][] = [
+          ['id', 'utc', 'action', 'entity_type', 'entity_id', 'actor', 'severity', 'hash', 'request_id'],
+          ...filtered.map((e) => [e.id, fmtTs(e.ts), e.action, e.entityType, e.entityId, e.actorName, severityOf(e.action), e.hash ?? '', e.requestId ?? '']),
+        ];
+        await exportTableCsv('audit-ledger.csv', table);
+      } else {
+        downloadFile('audit-ledger.json', JSON.stringify(filtered, null, 2), 'application/json');
+      }
+      setExpOpen(false);
+      push(true, 'Ledger Diekspor', `${filtered.length} event diekspor ke audit-ledger.${format}.`);
+    } catch {
+      push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
+    } finally {
+      setBusyExport(false);
     }
-    setExpOpen(false);
-    push(true, 'Ledger Exported', `${filtered.length} events exported to audit-ledger.${format}.`);
   };
 
   const downloadEvidence = (e: ProcessedEvent) => {
@@ -612,12 +599,12 @@ export function AuditTrail({
       JSON.stringify(proofDoc, null, 2),
       'application/json'
     );
-    push(true, 'Event Evidence Downloaded', `Unsigned JSON evidence for ${e.entityId} saved. Verify via Verify Cryptographic Root.`);
+    push(true, 'Bukti Event Diunduh', `Bukti JSON unsigned untuk ${e.entityId} disimpan. Verify via Verify Cryptographic Root.`);
   };
 
   const submitFlag = () => {
     setFlagOpen(false);
-    push(false, 'Flag Not Escalated', `Event #${sel.id} (${sel.entityId}) noted locally only — no server endpoint implements escalation.`);
+    push(false, 'Flag Tidak Dieskalasi', `Event #${sel.id} (${sel.entityId}) hanya dicatat lokal — tidak ada endpoint server untuk eskalasi.`);
   };
 
   const criticalCount = allEvents.filter((e) => severityOf(e.action) === 'Critical').length;
@@ -690,11 +677,11 @@ export function AuditTrail({
             <Dialog open={expOpen} onOpenChange={setExpOpen}>
               <DialogTrigger asChild>
                 <Button variant="secondary" className="h-9 gap-1.5 text-xs">
-                  <Download size={14} /> Export CSV / JSON Log
+                  <Download size={14} /> Ekspor Log CSV / JSON
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogTitle>Export Audit Ledger</DialogTitle>
+                <DialogTitle>Ekspor Ledger Audit</DialogTitle>
                 <DialogDescription>
                   Download {filtered.length} filtered events as raw forensic records.
                 </DialogDescription>
@@ -712,9 +699,9 @@ export function AuditTrail({
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="secondary" onClick={() => setExpOpen(false)}>
-                    Cancel
+                    Batal
                   </Button>
-                  <Button onClick={exportLog}>Download {format.toUpperCase()}</Button>
+                  <Button onClick={exportLog} disabled={busyExport}>Unduh {format.toUpperCase()}</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -746,7 +733,7 @@ export function AuditTrail({
                   </div>
                 </div>
                 <p className="rounded border border-warn/40 bg-warn-bg px-2.5 py-1.5 text-[11px] text-warn-ink my-2">
-                  PDF export is not implemented — use Export CSV / JSON Log for real data.
+                  Ekspor PDF belum tersedia — gunakan Ekspor Log CSV / JSON untuk data nyata.
                 </p>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="secondary" onClick={() => setPdfOpen(false)}>
@@ -941,8 +928,8 @@ export function AuditTrail({
                 setQ(e.target.value);
                 setPage(0);
               }}
-              placeholder="Filter by Entity ID, Hash, User, Action... (⌘/)"
-              aria-label="Search audit events"
+              placeholder="Filter berdasarkan ID Entitas, Hash, User, Aksi... (⌘/)"
+              aria-label="Cari event audit"
               className="pl-9 h-9 text-xs"
             />
           </div>
@@ -951,7 +938,7 @@ export function AuditTrail({
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              aria-label="Date range"
+              aria-label="Rentang tanggal"
               className="w-full h-9 px-2 border border-border-strong rounded text-xs bg-card text-body"
             >
               <option>Today</option>
@@ -968,7 +955,7 @@ export function AuditTrail({
                 setEntity(e.target.value);
                 setPage(0);
               }}
-              aria-label="Entity filter"
+              aria-label="Filter entitas"
               className="w-full h-9 px-2 border border-border-strong rounded text-xs bg-card text-body"
             >
               {['All Entities', ...entities].map((s) => (
@@ -984,7 +971,7 @@ export function AuditTrail({
                 setAction(e.target.value);
                 setPage(0);
               }}
-              aria-label="Action filter"
+              aria-label="Filter aksi"
               className="w-full h-9 px-2 border border-border-strong rounded text-xs bg-card text-body"
             >
               {['All Actions', ...actions].map((s) => (
@@ -1000,7 +987,7 @@ export function AuditTrail({
                 setPrincipal(e.target.value);
                 setPage(0);
               }}
-              aria-label="Principal filter"
+              aria-label="Filter prinsipal"
               className="w-full h-9 px-2 border border-border-strong rounded text-xs bg-card text-body"
             >
               {['All Principals', ...principals].map((s) => (
@@ -1051,7 +1038,7 @@ export function AuditTrail({
                 setSev(e.target.value);
                 setPage(0);
               }}
-              aria-label="Severity filter"
+              aria-label="Filter severitas"
               className="h-8 px-2 border border-border-strong rounded text-xs bg-card text-body"
             >
               {['All Levels', 'Critical', 'Notice', 'Info'].map((s) => (
@@ -1086,7 +1073,7 @@ export function AuditTrail({
                   type="button"
                   onClick={triggerRefetch}
                   className="w-7 h-7 flex items-center justify-center rounded border border-border-subtle bg-card hover:bg-surface text-body transition-colors"
-                  title="Force Refetch"
+                  title="Paksa Muat Ulang"
                 >
                   <RefreshCw size={13} className={cn(refetching && 'animate-spin')} />
                 </button>
@@ -1099,7 +1086,7 @@ export function AuditTrail({
               onScroll={feedWin.onScroll}
               className="divide-y divide-border-subtle flex flex-col overflow-y-auto max-h-[640px]"
               role="feed"
-              aria-label="Audit feed"
+              aria-label="Feed audit"
             >
               {feedWin.topPad > 0 && <div style={{ height: feedWin.topPad }} aria-hidden="true" />}
               {feedWin.items.map((e) => {
@@ -1157,7 +1144,7 @@ export function AuditTrail({
                         {e.demo && (
                           <span
                             className="px-1.5 py-0.2 rounded bg-warn-bg border border-warn/40 text-warn-ink text-[10px] font-mono font-bold uppercase"
-                            title="Demonstration row — not part of the server ledger"
+                            title="Baris demonstrasi — bukan bagian ledger server"
                           >
                             Demo
                           </span>
@@ -1212,7 +1199,7 @@ export function AuditTrail({
                   <p className="font-semibold text-sm">No audit events match your filters</p>
                   <p className="text-xs">Reset the filters to inspect the full immutable ledger stream.</p>
                   <Button variant="secondary" onClick={reset} className="mt-2 text-xs">
-                    Reset Filters
+                    Reset Filter
                   </Button>
                 </div>
               )}
@@ -1230,7 +1217,7 @@ export function AuditTrail({
                     setPageSize(Number(e.target.value));
                     setPage(0);
                   }}
-                  aria-label="Page size"
+                  aria-label="Ukuran halaman"
                   className="h-8 px-2 border border-border-strong rounded bg-card text-body text-xs"
                 >
                   {[10, 25, 50, 100].map((n) => (
@@ -1523,12 +1510,12 @@ export function AuditTrail({
                       </div>
                       <div className="flex justify-end gap-2 pt-2">
                         <Button variant="secondary" onClick={() => setRollbackOpen(false)}>
-                          Cancel
+                          Batal
                         </Button>
                         <Button
                           onClick={() => {
                             setRollbackOpen(false);
-                            push(true, 'Rollback Dry-Run Complete', 'Simulation only — no ledger write was performed.');
+                            push(true, 'Dry-Run Rollback Selesai', 'Hanya simulasi — tidak ada tulis ke ledger.');
                           }}
                         >
                           Acknowledge Dry-Run
@@ -1573,7 +1560,7 @@ export function AuditTrail({
                           <textarea
                             value={flagNotes}
                             onChange={(e) => setFlagNotes(e.target.value)}
-                            placeholder="Describe reasons for security escalation..."
+                            placeholder="Jelaskan alasan eskalasi keamanan..."
                             rows={3}
                             className="w-full p-2 border border-border-strong rounded text-xs bg-card"
                           />
@@ -1581,10 +1568,10 @@ export function AuditTrail({
                       </div>
                       <div className="flex justify-end gap-2 pt-2">
                         <Button variant="secondary" onClick={() => setFlagOpen(false)}>
-                          Cancel
+                          Batal
                         </Button>
                         <Button variant="destructive" onClick={submitFlag}>
-                          Confirm Flag Escalation
+                          Konfirmasi Eskalasi Flag
                         </Button>
                       </div>
                     </DialogContent>
@@ -1652,36 +1639,7 @@ export function AuditTrail({
       </section>
 
       {/* Floating Toast Notification Container */}
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm pointer-events-none" aria-live="polite">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            role={t.ok ? 'status' : 'alert'}
-            className={cn(
-              'pointer-events-auto rounded-lg shadow-modal p-3.5 flex gap-3 items-start border',
-              t.ok ? 'bg-pass-bg border-pass text-pass-ink' : 'bg-fail-bg border-fail text-fail-ink'
-            )}
-          >
-            {t.ok ? (
-              <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
-            ) : (
-              <XCircle size={18} className="shrink-0 mt-0.5" />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold leading-tight">{t.title}</p>
-              <p className="text-[11px] leading-snug mt-0.5 opacity-90">{t.msg}</p>
-            </div>
-            <button
-              type="button"
-              aria-label="Dismiss"
-              onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}
-              className="opacity-70 hover:opacity-100"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-      </div>
+            <ToastStack toasts={toasts} onDismiss={dismiss} className="pointer-events-none [&>div]:pointer-events-auto" />
     </div>
   );
 }

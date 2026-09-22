@@ -1,9 +1,11 @@
 'use client';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Download, LoaderCircle, Plus, X, XCircle } from 'lucide-react';
+import { Download, LoaderCircle, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,8 +14,6 @@ import { cn } from '@/lib/utils';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import type { SrRow } from '@/lib/services/sr-service';
 
-interface Toast { id: number; ok: boolean; title: string; msg: string }
-let toastSeq = 1700;
 
 function statusTone(r: SrRow): 'pass' | 'warn' | 'fail' | 'info' | 'hold' {
   switch (r.status) {
@@ -34,8 +34,7 @@ export function ServiceRequestList({
   const router = useRouter();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('Semua Status');
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(8000);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const [newOpen, setNewOpen] = useState(false);
@@ -52,17 +51,7 @@ export function ServiceRequestList({
   const [closeSR, setCloseSR] = useState<SrRow | null>(null);
   const [closeReason, setCloseReason] = useState('');
 
-  const push = (ok: boolean, title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
-    toastTimers.current.push(timer);
-  };
 
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
-  }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -85,13 +74,12 @@ export function ServiceRequestList({
     if (busyKey) return;
     setBusy('export');
     try {
-      const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+      const { exportTableCsv } = await import('@/lib/csv-export');
       const table: (string | number)[][] = [
         ['number', 'title', 'requester', 'priority', 'status', 'sla', 'asset', 'converted_wo'],
         ...filtered.map((r) => [r.number, r.title, r.requesterName, r.priority, r.statusLabel, r.slaLabel, r.assetCode ?? '', r.convertedWoNumber ?? '']),
       ];
-      const csv = await buildCsvViaWorker(table, ',');
-      await saveAsViaPickerOrDownload('service-requests-queue.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+      await exportTableCsv('service-requests-queue.csv', table);
       push(true, 'Ekspor berhasil', `${filtered.length} tiket → service-requests-queue.csv (baris yang difilter).`);
     } catch {
       push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
@@ -369,15 +357,7 @@ export function ServiceRequestList({
         </DialogContent>
       </Dialog>
 
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
-            {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
-            <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Tutup notifikasi" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

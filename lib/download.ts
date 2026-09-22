@@ -21,7 +21,7 @@ export function downloadText(filename: string, text: string, type = 'text/csv'):
 }
 
 
-type CsvRow = (string | number | null | undefined)[];
+export type CsvRow = (string | number | null | undefined)[];
 
 export async function buildCsvViaWorker(
   rows: CsvRow[],

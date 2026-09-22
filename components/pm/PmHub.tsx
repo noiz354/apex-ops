@@ -1,8 +1,10 @@
 'use client';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, CheckCircle2, FlaskConical, Pause, Play, Plus, X, XCircle, Zap } from 'lucide-react';
+import { CalendarDays, FlaskConical, Pause, Play, Plus, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,8 +33,6 @@ interface ServerRule {
 
 const DUE_SOON_MS = 14 * 24 * 3600 * 1000;
 
-interface Toast { id: number; ok: boolean; title: string; msg: string }
-let toastSeq = 800;
 
 const stateTone = (s: string) =>
   s === 'OVERDUE' ? 'fail' : s === 'DUE SOON' || s === 'PAUSED' ? 'warn' : s === 'READY' || s === 'ACTIVE' ? 'info' : 'hold';
@@ -58,8 +58,7 @@ export function PmHub() {
   const [dirError, setDirError] = useState('');
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<string>('Semua');
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(8000);
   const [generated, setGenerated] = useState<Record<string, string>>({});
   const [dispatching, setDispatching] = useState(false);
   const [simOpen, setSimOpen] = useState(false);
@@ -69,17 +68,7 @@ export function PmHub() {
   const [npDays, setNpDays] = useState('90');
   const [npTouched, setNpTouched] = useState(false);
 
-  const push = (ok: boolean, title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
-    toastTimers.current.push(timer);
-  };
 
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
-  }, []);
 
   const live = dirState === 'live';
 
@@ -98,14 +87,21 @@ export function PmHub() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const dueSoon = (r: ServerRule) =>
-    r.status === 'ACTIVE' && !r.isOverdue && new Date(r.nextDueAt).getTime() - Date.now() <= DUE_SOON_MS;
+  const dueSoon = useCallback((r: ServerRule) =>
+    r.status === 'ACTIVE' && !r.isOverdue && new Date(r.nextDueAt).getTime() - Date.now() <= DUE_SOON_MS, []);
 
-  const queue: ServerRule[] = live && rules
+  const queue: ServerRule[] = useMemo(() => (live && rules
     ? rules.filter((r) => r.status === 'ACTIVE' && (r.isOverdue || dueSoon(r)))
-    : [];
+    : []), [live, rules, dueSoon]);
+  const pendingCount = useMemo(() => queue.filter((r) => !generated[r.id]).length, [queue, generated]);
+  const counts = useMemo(() => ({
+    active: live && rules ? rules.filter((r) => r.status === 'ACTIVE').length : 0,
+    overdue: live && rules ? rules.filter((r) => r.isOverdue && r.status === 'ACTIVE').length : 0,
+    dueSoonN: live && rules ? rules.filter((r) => dueSoon(r)).length : 0,
+    paused: live && rules ? rules.filter((r) => r.status === 'PAUSED').length : 0,
+  }), [live, rules, dueSoon]);
 
-  const filtered: Plan[] = live && rules
+  const filtered: Plan[] = useMemo(() => (live && rules
     ? rules
       .filter((r) => {
         if (filter === 'Terlambat' && !r.isOverdue) return false;
@@ -119,7 +115,7 @@ export function PmHub() {
         const d = dueLabel(r);
         return {
           id: r.id, name: r.title, asset: r.assetCode, zone: '—',
-          cadence: `Every ${r.intervalDays} Days`, trigger: 'Calendar (Fixed)',
+          cadence: `Setiap ${r.intervalDays} Hari`, trigger: 'Kalender (Tetap)',
           last: fmtDate(r.lastGeneratedAt), lastWo: generated[r.id] ?? '—',
           next: d.text, state: d.state,
           cat: r.status === 'PAUSED' ? 'Paused' : r.isOverdue ? 'Overdue' : dueSoon(r) ? 'Due soon' : 'Active',
@@ -128,7 +124,7 @@ export function PmHub() {
     : SEED.filter((p) => {
       const needle = q.trim().toLowerCase();
       return !needle || `${p.id} ${p.name} ${p.asset}`.toLowerCase().includes(needle);
-    });
+    })), [live, rules, filter, q, dueSoon, generated]);
 
   const createPlan = async () => {
     setNpTouched(true);
@@ -203,9 +199,9 @@ export function PmHub() {
 
   const kpis = live && rules ? [
     { l: 'Total Rule PM', v: String(rules.length), s: 'jumlah server live' },
-    { l: 'Rule Aktif', v: String(rules.filter((r) => r.status === 'ACTIVE').length), s: 'jumlah server live' },
-    { l: 'Terlambat', v: String(rules.filter((r) => r.isOverdue && r.status === 'ACTIVE').length), s: 'jumlah server live' },
-    { l: 'Jatuh tempo ≤ 14 hari', v: String(rules.filter((r) => dueSoon(r)).length), s: 'jumlah server live' },
+    { l: 'Rule Aktif', v: String(counts.active), s: 'jumlah server live' },
+    { l: 'Terlambat', v: String(counts.overdue), s: 'jumlah server live' },
+    { l: 'Jatuh tempo ≤ 14 hari', v: String(counts.dueSoonN), s: 'jumlah server live' },
     { l: 'Mode Dispatch', v: 'MANUAL', s: 'Generate dari antrean di bawah · tanpa mesin otomatis' },
   ] : [
     { l: 'Total Plan PM Aktif', v: '38 (demo)', s: 'data demo — server tidak terjangkau' },
@@ -240,10 +236,10 @@ export function PmHub() {
               title={live ? 'Gulir ke antrean generate' : 'Server tidak terjangkau — mode demo'}
               onClick={() => {
                 document.getElementById('dispatch-queue')?.scrollIntoView({ behavior: 'smooth' });
-                push(true, 'Antrean siap', `${queue.filter((r) => !generated[r.id]).length} plan menunggu eksekusi di bawah.`);
+                push(true, 'Antrean siap', `${pendingCount} plan menunggu eksekusi di bawah.`);
               }}
             >
-              <Zap size={16} /> Generate Work Order · {live ? queue.filter((r) => !generated[r.id]).length : '—'} Siap
+              <Zap size={16} /> Generate Work Order · {live ? pendingCount : '—'} Siap
             </Button>
             <Dialog open={newOpen} onOpenChange={setNewOpen}>
               <DialogTrigger asChild>
@@ -433,7 +429,7 @@ export function PmHub() {
           )}
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void executeBatch()} disabled={dispatching || !live} title={live ? 'Generate WO untuk semua rule antre' : 'Server tidak terjangkau — mode demo'}>
-              <Zap size={16} /> {dispatching ? 'Membuat…' : `Eksekusi Batch Dispatch (${live ? queue.filter((r) => !generated[r.id]).length : 0} WO)`}
+              <Zap size={16} /> {dispatching ? 'Membuat…' : `Eksekusi Batch Dispatch (${live ? pendingCount : 0} WO)`}
             </Button>
             <Button variant="secondary" onClick={() => setSimOpen((s) => !s)}>
               <FlaskConical size={16} /> Simulasi Generate
@@ -466,8 +462,8 @@ export function PmHub() {
             </div>
             <div className="grid grid-cols-2 gap-2 text-[13px]">
               <div className="rounded border border-border-subtle bg-card p-2"><p className="apex-label-caps text-muted">Siap sekarang</p><p className="text-lg font-bold">{live && rules ? `${queue.length} rule` : '4 plan (demo)'}</p></div>
-              <div className="rounded border border-border-subtle bg-card p-2"><p className="apex-label-caps text-muted">Jeda</p><p className="text-lg font-bold">{live && rules ? String(rules.filter((r) => r.status === 'PAUSED').length) : '—'}</p></div>
-              <div className="rounded border border-border-subtle bg-card p-2"><p className="apex-label-caps text-muted">Terlambat</p><p className="text-lg font-bold text-fail">{live && rules ? String(rules.filter((r) => r.isOverdue && r.status === 'ACTIVE').length) : '03 (demo)'}</p></div>
+              <div className="rounded border border-border-subtle bg-card p-2"><p className="apex-label-caps text-muted">Jeda</p><p className="text-lg font-bold">{live && rules ? String(counts.paused) : '—'}</p></div>
+              <div className="rounded border border-border-subtle bg-card p-2"><p className="apex-label-caps text-muted">Terlambat</p><p className="text-lg font-bold text-fail">{live && rules ? String(counts.overdue) : '03 (demo)'}</p></div>
               <div className="rounded border border-border-subtle bg-card p-2"><p className="apex-label-caps text-muted">Terbuat sesi ini</p><p className="text-lg font-bold text-pass">{Object.keys(generated).length}</p></div>
             </div>
             <div className="rounded border border-border-subtle bg-card p-2 text-[13px]">
@@ -478,15 +474,7 @@ export function PmHub() {
         </div>
       </section>
 
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
-            {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
-            <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Tutup notifikasi" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

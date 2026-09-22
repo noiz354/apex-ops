@@ -52,7 +52,7 @@ export function AssetRegistry({ rows }: { rows: AssetRow[] }) {
     if (busyExport) return;
     setBusyExport(true);
     try {
-    const { saveAsViaPickerOrDownload } = await import('@/lib/download');
+    const { exportTableCsv } = await import('@/lib/csv-export');
     const rows: (string | number)[][] = [
       ['code', 'name', 'class', 'location', 'oem', 'serial', 'health', 'status', 'commissioned_on', 'open_wos', 'total_wos', 'active_srs'],
       ...filtered.map((r) => [
@@ -60,10 +60,7 @@ export function AssetRegistry({ rows }: { rows: AssetRow[] }) {
         r.health, r.status, r.commissionedOn ?? '', r.openWos, r.totalWos, r.activeSrs,
       ]),
     ];
-    const { buildCsvViaWorker } = await import('@/lib/download');
-    const csv = await buildCsvViaWorker(rows, ',');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    await saveAsViaPickerOrDownload('asset-registry.csv', blob, 'text/csv');
+    await exportTableCsv('asset-registry.csv', rows);
     } finally {
       setBusyExport(false);
     }

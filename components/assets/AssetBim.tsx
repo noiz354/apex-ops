@@ -12,11 +12,11 @@ type Layer = 'mech' | 'elec' | 'tele';
 interface NodeInfo { sub: string; value: string; status: string; x: number; y: number; tone: 'alarm' | 'warn' | 'ok'; tagX: number; tagY: number }
 
 const NODES: Record<string, NodeInfo> = {
-  'TT-04A': { sub: 'Seal cavity temperature', value: '84.1°C', status: 'ALARM — above 80°C trip watch', x: 140, y: 180, tone: 'alarm', tagX: 156, tagY: 184 },
-  'VT-04B': { sub: 'Bearing vibration', value: '7.8 mm/s', status: 'ALARM — at safety trip', x: 230, y: 180, tone: 'alarm', tagX: 246, tagY: 184 },
-  'GS-04C': { sub: 'Refrigerant sniff R-134a', value: '18.4 ppm', status: 'WARNING — exceeds 5 ppm limit', x: 320, y: 250, tone: 'warn', tagX: 336, tagY: 254 },
-  'PT-03A': { sub: 'Discharge pressure', value: '118 PSI', status: 'NOMINAL — envelope 110–130', x: 460, y: 180, tone: 'ok', tagX: 476, tagY: 184 },
-  'EL-DP02': { sub: 'Panel DP-02 voltage', value: '0.0V', status: 'NOMINAL — LOTO verified #4092', x: 680, y: 180, tone: 'ok', tagX: 640, tagY: 210 },
+  'TT-04A': { sub: 'Suhu rongga seal', value: '84.1°C', status: 'ALARM — di atas pengawasan trip 80°C', x: 140, y: 180, tone: 'alarm', tagX: 156, tagY: 184 },
+  'VT-04B': { sub: 'Getaran bearing', value: '7.8 mm/s', status: 'ALARM — pada trip pengaman', x: 230, y: 180, tone: 'alarm', tagX: 246, tagY: 184 },
+  'GS-04C': { sub: 'Deteksi refrigeran R-134a', value: '18.4 ppm', status: 'PERINGATAN — melebihi batas 5 ppm', x: 320, y: 250, tone: 'warn', tagX: 336, tagY: 254 },
+  'PT-03A': { sub: 'Tekanan discharge', value: '118 PSI', status: 'NOMINAL — rentang 110–130', x: 460, y: 180, tone: 'ok', tagX: 476, tagY: 184 },
+  'EL-DP02': { sub: 'Tegangan Panel DP-02', value: '0.0V', status: 'NOMINAL — LOTO terverifikasi #4092', x: 680, y: 180, tone: 'ok', tagX: 640, tagY: 210 },
 };
 
 const DOT = { alarm: '#DC2626', warn: '#D97706', ok: '#059669' } as const;
@@ -27,7 +27,7 @@ export function AssetBim({ assetId }: { assetId: string }) {
   const [layers, setLayers] = useState<Record<Layer, boolean>>({ mech: true, elec: true, tele: true });
   const [node, setNode] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [updated, setUpdated] = useState('never — press Refresh Reading');
+  const [updated, setUpdated] = useState('belum pernah — tekan Perbarui Bacaan');
   const [liveCount, setLiveCount] = useState(0);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [liveValues, setLiveValues] = useState<Record<string, { value: string; status: string; at: string }>>({});
@@ -66,9 +66,9 @@ export function AssetBim({ assetId }: { assetId: string }) {
       setLiveValues(mapped);
       setLiveCount(Object.keys(mapped).length);
       const n = Object.keys(mapped).length;
-      setUpdated(n > 0 ? `${wibNow()} WIB · ${n} live reading${n === 1 ? '' : 's'}` : 'no live readings — showing design reference values');
+      setUpdated(n > 0 ? `${wibNow()} WIB · ${n} bacaan live` : 'tidak ada bacaan live — menampilkan nilai referensi desain');
     } catch (e) {
-      setLiveError(e instanceof Error ? e.message : 'Refresh failed — showing design reference values.');
+      setLiveError(e instanceof Error ? e.message : 'Gagal memperbarui — menampilkan nilai referensi desain.');
     } finally {
       setRefreshing(false);
     }
@@ -85,13 +85,13 @@ export function AssetBim({ assetId }: { assetId: string }) {
           <Link
             href={`/assets/${assetId}`}
             className="w-9 h-9 shrink-0 flex items-center justify-center rounded bg-cobalt-tint"
-            aria-label="Back to asset detail"
+            aria-label="Kembali ke detail aset"
           >
             <ArrowLeft size={18} />
           </Link>
           <div className="min-w-0">
             <h1 className="text-base font-semibold truncate">BIM · <span className="apex-id text-cobalt-deep">{assetId}</span></h1>
-            <p className="text-xs text-muted truncate">{CANON.assetOem} · CUP BASEMENT L2 · SECTOR WEST · schematic reference · {liveCount} live node{liveCount === 1 ? '' : 's'} via Refresh</p>
+            <p className="text-xs text-muted truncate">{CANON.assetOem} · CUP BASEMENT L2 · SECTOR WEST · referensi skematik · {liveCount} node live via Perbarui</p>
           </div>
         </nav>
         <div className="flex items-center gap-2 shrink-0">
@@ -108,9 +108,9 @@ export function AssetBim({ assetId }: { assetId: string }) {
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
-        <main className="flex-1 flex flex-col gap-3 min-w-0" aria-label="BIM viewport">
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Layers">
-            {([['mech', 'Mechanical'], ['elec', 'Electrical'], ['tele', 'Telemetry']] as [Layer, string][]).map(([l, label]) => (
+        <main className="flex-1 flex flex-col gap-3 min-w-0" aria-label="Viewport BIM">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Lapisan">
+            {([['mech', 'Mekanikal'], ['elec', 'Elektrikal'], ['tele', 'Telemetri']] as [Layer, string][]).map(([l, label]) => (
               <button
                 key={l}
                 type="button"
@@ -124,11 +124,11 @@ export function AssetBim({ assetId }: { assetId: string }) {
                 {label}
               </button>
             ))}
-            <span className="text-xs text-muted ml-auto">Click a node → detail drawer · ESC closes</span>
+            <span className="text-xs text-muted ml-auto">Klik node → drawer detail · ESC menutup</span>
           </div>
 
           <div className="flex-1 min-h-[420px] bg-[#0B1C30] rounded-lg border border-[#0B1C30] overflow-hidden relative">
-            <svg viewBox="0 0 800 460" className="w-full h-full" role="img" aria-label="Schematic plan of CUP basement L2 sector west">
+            <svg viewBox="0 0 800 460" className="w-full h-full" role="img" aria-label="Denah skematik CUP basement L2 sektor barat">
               <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
                   <path d="M40 0H0V40" fill="none" stroke="#1E293B" strokeWidth="1" />
@@ -182,7 +182,7 @@ export function AssetBim({ assetId }: { assetId: string }) {
                 </g>
               )}
               <text x="24" y="440" fontFamily="JetBrains Mono" fontSize="10" fill="#64748B">
-                schematic reference · showing 5 reference nodes · live values via Refresh Reading
+                referensi skematik · menampilkan 5 node referensi · nilai live via Perbarui Bacaan
               </text>
             </svg>
           </div>
@@ -191,16 +191,16 @@ export function AssetBim({ assetId }: { assetId: string }) {
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-fail-bg text-fail-ink font-semibold"><span className="w-2 h-2 rounded-full bg-fail" />ALARM (2)</span>
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-warn-bg text-warn-ink font-semibold"><span className="w-2 h-2 rounded-full bg-warn" />WARNING (1)</span>
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-pass-bg text-pass-ink font-semibold"><span className="w-2 h-2 rounded-full bg-pass" />NOMINAL (35)</span>
-            <span className="text-[11px] text-muted">reference distribution — live status per node after Refresh</span>
+            <span className="text-[11px] text-muted">distribusi referensi — status live per node setelah Perbarui</span>
           </div>
         </main>
 
-        <aside className="w-full lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-border-subtle bg-card rounded-lg lg:rounded-none p-4 flex flex-col gap-3" aria-label="Node detail">
+        <aside className="w-full lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-border-subtle bg-card rounded-lg lg:rounded-none p-4 flex flex-col gap-3" aria-label="Detail node">
           {node === null ? (
             <div>
-              <h2 className="text-base font-semibold">Node Detail</h2>
-              <p className="text-sm text-muted">Select a telemetry node on the plan. Detail opens here (drawer pattern).</p>
-              <Link className="text-sm font-semibold text-cobalt-deep hover:underline" href={`/assets/${assetId}`}>Open full asset ledger</Link>
+              <h2 className="text-base font-semibold">Detail Node</h2>
+              <p className="text-sm text-muted">Pilih node telemetri pada denah. Detail terbuka di sini (pola drawer).</p>
+              <Link className="text-sm font-semibold text-cobalt-deep hover:underline" href={`/assets/${assetId}`}>Buka ledger aset lengkap</Link>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -213,25 +213,25 @@ export function AssetBim({ assetId }: { assetId: string }) {
                   type="button"
                   onClick={() => setNode(null)}
                   className="w-9 h-9 flex items-center justify-center rounded bg-cobalt-tint"
-                  aria-label="Close detail"
+                  aria-label="Tutup detail"
                 >
                   <X size={18} />
                 </button>
               </div>
               <p className="text-3xl font-bold tabular-nums" role="status">{refreshing ? '…' : (liveValues[node]?.value ?? NODES[node].value)}</p>
-              <p className="text-[11px] text-muted">{liveValues[node] ? `Live reading · ${liveValues[node].at}` : 'Design reference value — no live reading for this node yet'}</p>
+              <p className="text-[11px] text-muted">{liveValues[node] ? `Bacaan live · ${liveValues[node].at}` : 'Nilai referensi desain — belum ada bacaan live untuk node ini'}</p>
               <ul className="text-sm flex flex-col gap-1">
                 <li className="flex justify-between gap-2"><span className="text-muted">Status</span><strong>{liveValues[node]?.status ?? NODES[node].status}</strong></li>
-                <li className="flex justify-between gap-2"><span className="text-muted">Asset</span><span className="apex-id">{assetId}</span></li>
+                <li className="flex justify-between gap-2"><span className="text-muted">Aset</span><span className="apex-id">{assetId}</span></li>
                 <li className="flex justify-between gap-2">
                   <span className="text-muted">Work order</span>
                   <Link className="apex-id text-cobalt-deep font-semibold hover:underline" href={`/work-orders/${CANON.workOrderSeal}`}>{CANON.workOrderSeal}</Link>
                 </li>
-                <li className="flex justify-between gap-2"><span className="text-muted">Updated</span><span>{updated}</span></li>
+                <li className="flex justify-between gap-2"><span className="text-muted">Diperbarui</span><span>{updated}</span></li>
               </ul>
               <Button onClick={() => void refresh()} disabled={refreshing} className="h-10">
                 {refreshing && <LoaderCircle size={16} className="animate-spin" />}
-                Refresh Reading
+                Perbarui Bacaan
               </Button>
               {liveError && <p className="text-[11px] font-semibold text-fail" role="alert">{liveError}</p>}
             </div>

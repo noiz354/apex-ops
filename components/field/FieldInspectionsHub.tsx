@@ -27,8 +27,6 @@ import {
   TrendingUp,
   Upload,
   Workflow,
-  X,
-  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +38,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 import { ApiError, apiFetch } from '@/lib/api/client';
 
 
@@ -212,14 +212,7 @@ const INITIAL_STEPS: ChecklistStep[] = [
   },
 ];
 
-interface Toast {
-  id: number;
-  ok: boolean;
-  title: string;
-  msg: string;
-}
 
-let toastIdSeq = 3000;
 
 export function FieldInspectionsHub() {
   const [tab, setTab] = useState<QueueTab>('all');
@@ -230,8 +223,7 @@ export function FieldInspectionsHub() {
   const [live, setLive] = useState(false);
   const [dispatching, setDispatching] = useState<string | null>(null);
   const [steps, setSteps] = useState<ChecklistStep[]>(INITIAL_STEPS);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(6000);
   const [busyExport, setBusyExport] = useState(false);
 
   const [createTemplateOpen, setCreateTemplateOpen] = useState(false);
@@ -254,27 +246,16 @@ export function FieldInspectionsHub() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const pushToast = (ok: boolean, title: string, msg: string) => {
-    const id = toastIdSeq++;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
-    toastTimers.current.push(timer);
-  };
-
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
-  }, []);
-
+  
   const loadAudits = useCallback(async (silent: boolean) => {
     try {
       const res = await apiFetch<{ rows: ServerInspection[]; total: number }>('/api/inspections');
       if (res.rows.length > 0) setAudits(res.rows.map(toHubRow));
       setLive(true);
-      if (!silent) pushToast(true, 'Antrean Dimuat Ulang', `${res.rows.length} inspeksi dari server.`);
+      if (!silent) push(true, 'Antrean Dimuat Ulang', `${res.rows.length} inspeksi dari server.`);
     } catch {
       setLive(false);
-      pushToast(false, 'Offline', 'Antrean inspeksi dari cadangan demo.');
+      push(false, 'Offline', 'Antrean inspeksi dari cadangan demo.');
     }
   }, []);
 
@@ -296,20 +277,20 @@ export function FieldInspectionsHub() {
             : a
         )
       );
-      pushToast(true, 'Dispatch Paksa Dijalankan', `Audit ${data.number} naik ke IN_PROGRESS (terkonfirmasi server).`);
+      push(true, 'Dispatch Paksa Dijalankan', `Audit ${data.number} naik ke IN_PROGRESS (terkonfirmasi server).`);
     } catch (err) {
-      pushToast(false, 'Dispatch Paksa Gagal', err instanceof ApiError ? `${err.message} (${err.code})` : 'Kegagalan dispatch tak dikenal.');
+      push(false, 'Dispatch Paksa Gagal', err instanceof ApiError ? `${err.message} (${err.code})` : 'Kegagalan dispatch tak dikenal.');
     } finally {
       setDispatching(null);
     }
   };
 
   const handleSaveDraft = () => {
-    pushToast(true, 'Draf Tersimpan', 'Protokol TMPL-HVAC-CHL-02 v2.4 tersimpan sebagai draf lokal.');
+    push(true, 'Draf Tersimpan', 'Protokol TMPL-HVAC-CHL-02 v2.4 tersimpan sebagai draf lokal.');
   };
 
   const handlePublishTemplate = () => {
-    pushToast(true, 'Protokol Diterbitkan (lokal)', 'Template TMPL-HVAC-CHL-02 v2.4 ditandai terbit — hanya lokal, belum terkirim ke teknisi.');
+    push(true, 'Protokol Diterbitkan (lokal)', 'Template TMPL-HVAC-CHL-02 v2.4 ditandai terbit — hanya lokal, belum terkirim ke teknisi.');
   };
 
   const handleAddStep = () => {
@@ -325,7 +306,7 @@ export function FieldInspectionsHub() {
     setSteps([...steps, newStep]);
     setNewStepTitle('');
     setAddStepOpen(false);
-    pushToast(true, 'Langkah Ditambahkan', `Langkah 0${nextSeq} ditambahkan ke draf protokol.`);
+    push(true, 'Langkah Ditambahkan', `Langkah 0${nextSeq} ditambahkan ke draf protokol.`);
   };
 
   const filteredAudits = useMemo(() => audits.filter((a) => {
@@ -342,16 +323,15 @@ export function FieldInspectionsHub() {
     if (busyExport) return;
     setBusyExport(true);
     try {
-      const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+      const { exportTableCsv } = await import('@/lib/csv-export');
       const table: (string | number)[][] = [
         ['audit_id', 'name', 'asset', 'zone', 'due', 'assignee', 'status', 'progress'],
         ...filteredAudits.map((a) => [a.id, a.name, a.assetId, a.zone, `${a.dueText} ${a.dueSub}`, a.assignee, a.status, a.progress ?? '']),
       ];
-      const csv = await buildCsvViaWorker(table, ',');
-      await saveAsViaPickerOrDownload('audit-log.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
-      pushToast(true, 'Log Audit Diekspor', `Manifes CSV dari ${filteredAudits.length} audit terjadwal diunduh.`);
+      await exportTableCsv('audit-log.csv', table);
+      push(true, 'Log Audit Diekspor', `Manifes CSV dari ${filteredAudits.length} audit terjadwal diunduh.`);
     } catch {
-      pushToast(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
+      push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
     } finally {
       setBusyExport(false);
     }
@@ -453,7 +433,7 @@ export function FieldInspectionsHub() {
                   <Button
                     onClick={() => {
                       setCreateTemplateOpen(false);
-                      pushToast(true, 'Template Diinisiasi', `Draf protokol [${newTemplateName || 'Protokol Baru'}] dibuat (lokal).`);
+                      push(true, 'Template Diinisiasi', `Draf protokol [${newTemplateName || 'Protokol Baru'}] dibuat (lokal).`);
                     }}
                   >
                     Buat Draf
@@ -1114,36 +1094,7 @@ export function FieldInspectionsHub() {
       )}
 
       {/* Floating Toasts */}
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm pointer-events-none" aria-live="polite">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            role={t.ok ? 'status' : 'alert'}
-            className={cn(
-              'pointer-events-auto rounded-lg shadow-modal p-3 flex gap-3 items-start border',
-              t.ok ? 'bg-pass-bg border-pass text-pass-ink' : 'bg-fail-bg border-fail text-fail-ink'
-            )}
-          >
-            {t.ok ? (
-              <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
-            ) : (
-              <XCircle size={16} className="shrink-0 mt-0.5" />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold leading-tight">{t.title}</p>
-              <p className="text-[11px] leading-snug mt-0.5 opacity-90">{t.msg}</p>
-            </div>
-            <button
-              type="button"
-              aria-label="Tutup notifikasi"
-              onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}
-              className="opacity-70 hover:opacity-100"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-      </div>
+            <ToastStack toasts={toasts} onDismiss={dismiss} className="pointer-events-none [&>div]:pointer-events-auto" />
     </div>
   );
 }

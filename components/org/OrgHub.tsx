@@ -1,8 +1,10 @@
 'use client';
+import { useToasts } from '@/lib/use-toasts';
+import { ToastStack } from '@/components/ui/toast-stack';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Download, KeyRound, LoaderCircle, Lock, Pencil, PersonStanding, Plus, ShieldCheck, UserX, X, XCircle } from 'lucide-react';
+import { Download, KeyRound, LoaderCircle, Lock, Pencil, PersonStanding, Plus, ShieldCheck, UserX } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,8 +110,6 @@ function seedMatrix(role: string): Cell[][] {
 
 const SEEDED_TEMPLATES = ['Enterprise Admin', 'Senior Field Tech', 'Read-Only Auditor'];
 
-interface Toast { id: number; ok: boolean; title: string; msg: string }
-let toastSeq = 1100;
 
 
 const initials = (n: string) => n.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -117,7 +117,7 @@ const initials = (n: string) => n.split(' ').map((w) => w[0]).slice(0, 2).join('
 export function OrgHub() {
   const [people, setPeople] = useState<Person[]>(SEED);
   const [q, setQ] = useState('');
-  const [team, setTeam] = useState<string>('All Teams (All)');
+  const [team, setTeam] = useState<string>('Semua Tim');
   const [roleF, setRoleF] = useState<string>('Semua Peran');
   const [statusF, setStatusF] = useState<string>('Semua Status');
   const [focus, setFocus] = useState('RFID-9021');
@@ -129,8 +129,7 @@ export function OrgHub() {
     'Read-Only Auditor': seedMatrix('Read-Only Auditor'),
   }));
   const [deployed, setDeployed] = useState<Record<string, string>>({});
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
+  const { toasts, push, dismiss } = useToasts(8000);
   const [provOpen, setProvOpen] = useState(false);
   const [prov, setProv] = useState<{ name: string; email: string; role: string; dept: string; rfid: string }>({ name: '', email: '', role: 'Engineering Lead', dept: DEPTS[0], rfid: '' });
   const [provTouched, setProvTouched] = useState(false);
@@ -178,17 +177,7 @@ export function OrgHub() {
     return () => document.removeEventListener('keydown', hot);
   }, []);
 
-  const push = (ok: boolean, title: string, msg: string) => {
-    const id = toastSeq++;
-    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
-    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
-    toastTimers.current.push(timer);
-  };
 
-  useEffect(() => () => {
-    toastTimers.current.forEach((t) => window.clearTimeout(t));
-    toastTimers.current = [];
-  }, []);
 
   const grid = matrix[role] ?? seedMatrix(role);
   const counts = grid.flat().reduce((a, c) => ({ ...a, [c]: (a as Record<string, number>)[c] + 1 }), { granted: 0, restricted: 0, locked: 0 } as Record<string, number>);
@@ -203,16 +192,16 @@ export function OrgHub() {
     setMatrix((x) => ({ ...x, [role]: g }));
   };
 
-  const filtered = people.filter((p) => {
-    if (team !== 'All Teams (All)' && p.team !== team) return false;
-    if (roleF !== 'All Roles' && p.role !== roleF) return false;
+  const filtered = useMemo(() => people.filter((p) => {
+    if (team !== 'Semua Tim' && p.team !== team) return false;
+    if (roleF !== 'Semua Peran' && p.role !== roleF) return false;
     if (statusF === 'Active' && p.status !== 'Active') return false;
     if (statusF === 'On Shift / Leave' && p.status !== 'On Shift') return false;
     if (statusF === 'Expiring Contract' && p.status !== 'Expiring Contract') return false;
     if (statusF === 'Deactivated' && p.status !== 'Deactivated') return false;
     const needle = q.trim().toLowerCase();
     return !needle || `${p.name} ${p.title} ${p.line} ${p.focus}`.toLowerCase().includes(needle);
-  });
+  }), [people, team, roleF, statusF, q]);
 
   const focusP = people.find((p) => p.focus === focus) ?? people[0];
 
@@ -221,13 +210,12 @@ export function OrgHub() {
     if (busyExport) return;
     setBusyExport(true);
     try {
-      const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+      const { exportTableCsv } = await import('@/lib/csv-export');
       const table: (string | number)[][] = [
         ['name', 'title', 'role', 'team', 'status', 'contact'],
         ...filtered.map((p) => [p.name, p.title, p.role, p.team, p.status, p.line]),
       ];
-      const csv = await buildCsvViaWorker(table, ',');
-      await saveAsViaPickerOrDownload('rbac-audit-log.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+      await exportTableCsv('rbac-audit-log.csv', table);
       push(true, 'Ekspor berhasil', `${filtered.length} baris roster → rbac-audit-log.csv.`);
     } catch {
       push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
@@ -355,7 +343,7 @@ export function OrgHub() {
   const deploy = () => {
     const stamp = new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB';
     setDeployed((d) => ({ ...d, [role]: stamp }));
-    push(true, 'Rules deployed (demo)', `${role}: ${counts.granted} grants · simulated push, local only — not persisted to a policy backend.`);
+    push(true, 'Rule diterapkan (demo)', `${role}: ${counts.granted} grants · simulated push, local only — not persisted to a policy backend.`);
   };
 
   const cloneRole = () => {
@@ -367,7 +355,7 @@ export function OrgHub() {
     setCloneOpen(false);
     setCloneName('');
     setCloneTouched(false);
-    push(true, 'Policy cloned', `${cloneName.trim()} drafted from ${role} · deploy to activate.`);
+    push(true, 'Policy diklon', `${cloneName.trim()} drafted from ${role} · deploy to activate.`);
   };
 
   return (
@@ -400,7 +388,7 @@ export function OrgHub() {
                   <li className="flex justify-between gap-2"><span>Session Timeout · tablets 30 min, desktop 120 min</span><Badge variant="info">30 / 120 MIN (reference)</Badge></li>
                   <li className="flex justify-between gap-2"><span>SCIM Sync · webhook push on create/terminate</span><Badge variant="info">PLANNED (local directory only)</Badge></li>
                 </ul>
-                <div className="flex justify-end"><Button variant="secondary" onClick={() => setSsoOpen(false)}>Close Policy Viewer</Button></div>
+                <div className="flex justify-end"><Button variant="secondary" onClick={() => setSsoOpen(false)}>Tutup Policy Viewer</Button></div>
               </DialogContent>
             </Dialog>
             <Dialog open={provOpen} onOpenChange={setProvOpen}>
@@ -471,7 +459,7 @@ export function OrgHub() {
                 {TEAMS.map((t) => <option key={t}>{t}</option>)}
               </select>
               <select value={roleF} onChange={(e) => setRoleF(e.target.value)} aria-label="Filter peran" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
-                {['All Roles', ...roles].map((r) => <option key={r}>{r}</option>)}
+                {['Semua Peran', ...roles].map((r) => <option key={r}>{r}</option>)}
               </select>
               <select value={statusF} onChange={(e) => setStatusF(e.target.value)} aria-label="Filter status" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
                 {STATUSES.map((s) => <option key={s}>{s}</option>)}
@@ -521,22 +509,22 @@ export function OrgHub() {
             <div className="grid grid-cols-2 gap-2">
               <Dialog open={editOpen} onOpenChange={setEditOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="secondary"><Pencil size={15} /> Edit Assignment</Button>
+                  <Button variant="secondary"><Pencil size={15} /> Ubah Assignment</Button>
                 </DialogTrigger>
                 <DialogContent aria-labelledby="edit-h">
-                  <DialogTitle id="edit-h">Edit Assignment — {focusP.name}</DialogTitle>
+                  <DialogTitle id="edit-h">Ubah Assignment — {focusP.name}</DialogTitle>
                   <DialogDescription>Peran + departemen disimpan ke record direktori.</DialogDescription>
                   <label className="text-xs font-semibold" htmlFor="edit-role">Assigned Role</label>
                   <select id="edit-role" value={editRole} onChange={(e) => setEditRole(e.target.value)} className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
                     {roles.map((r) => <option key={r}>{r}</option>)}
                   </select>
-                  <label className="text-xs font-semibold" htmlFor="edit-dept">Department / Crew</label>
+                  <label className="text-xs font-semibold" htmlFor="edit-dept">Departemen / Kru</label>
                   <select id="edit-dept" value={editDept} onChange={(e) => setEditDept(e.target.value)} className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
                     {DEPTS.map((d) => <option key={d}>{d}</option>)}
                   </select>
                   <div className="flex justify-end gap-2">
-                    <Button variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button>
-                    <Button onClick={saveEdit} disabled={acting}>Save Assignment</Button>
+                    <Button variant="secondary" onClick={() => setEditOpen(false)}>Batal</Button>
+                    <Button onClick={saveEdit} disabled={acting}>Simpan Assignment</Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -568,13 +556,13 @@ export function OrgHub() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold">Permission Matrix by Role <span className="text-xs font-normal text-muted">15 Scopes</span></h2>
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => { setMatrix((x) => ({ ...x, [role]: seedMatrix(role) })); push(true, 'Matrix reset', `${role} restored to archive seed.`); }}>Reset</Button>
+                <Button variant="secondary" onClick={() => { setMatrix((x) => ({ ...x, [role]: seedMatrix(role) })); push(true, 'Matriks direset', `${role} restored to archive seed.`); }}>Reset</Button>
                 <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
                   <DialogTrigger asChild>
                     <Button variant="secondary">Klon Kebijakan jadi Peran Baru</Button>
                   </DialogTrigger>
                   <DialogContent aria-labelledby="clone-h">
-                    <DialogTitle id="clone-h">Clone Policy as New Role</DialogTitle>
+                    <DialogTitle id="clone-h">Klon Policy jadi Peran Baru</DialogTitle>
                     <DialogDescription>Menyalin draf {role} saat ini menjadi template baru.</DialogDescription>
                     <label className="text-xs font-semibold" htmlFor="clone-name">New role name (required, unique)</label>
                     <Input id="clone-name" value={cloneName} onChange={(e) => setCloneName(e.target.value)} invalid={cloneTouched && (!cloneName.trim() || roles.includes(cloneName.trim()))} placeholder="e.g. Night Shift Supervisor" />
@@ -582,8 +570,8 @@ export function OrgHub() {
                       <p className="text-[11px] font-semibold text-fail">Nama peran unik wajib diisi.</p>
                     )}
                     <div className="flex justify-end gap-2">
-                      <Button variant="secondary" onClick={() => { setCloneOpen(false); setMatrix((x) => ({ ...x, [role]: seedMatrix(role) })); push(true, 'Changes discarded', `${role} draft reverted.`); }}>Discard Changes</Button>
-                      <Button onClick={cloneRole}>Clone Role</Button>
+                      <Button variant="secondary" onClick={() => { setCloneOpen(false); setMatrix((x) => ({ ...x, [role]: seedMatrix(role) })); push(true, 'Changes discarded', `${role} draft reverted.`); }}>Buang Perubahan</Button>
+                      <Button onClick={cloneRole}>Klon Peran</Button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -677,15 +665,7 @@ export function OrgHub() {
         </div>
       </section>
 
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
-            {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
-            <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Tutup notifikasi" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }
