@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Download } from 'lucide-react';
+import { Download, LoaderCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,29 +22,36 @@ function statusTone(s: string): 'pass' | 'warn' | 'info' {
   return 'info';
 }
 
-export function AssetRegistry({ rows, orgId }: { rows: AssetRow[]; orgId: string }) {
+export function AssetRegistry({ rows }: { rows: AssetRow[] }) {
   const [q, setQ] = useState('');
-  const [klass, setKlass] = useState('All Classes');
-  const [status, setStatus] = useState('All Statuses');
+  const [klass, setKlass] = useState('Semua Kelas');
+  const [status, setStatus] = useState('Semua Status');
+  const [busyExport, setBusyExport] = useState(false);
 
-  const classes = ['All Classes', ...Array.from(new Set(rows.map((r) => r.klass)))];
-  const statuses = ['All Statuses', ...Array.from(new Set(rows.map((r) => r.status)))];
+  const classes = useMemo(() => ['Semua Kelas', ...Array.from(new Set(rows.map((r) => r.klass)))], [rows]);
+  const statuses = useMemo(() => ['Semua Status', ...Array.from(new Set(rows.map((r) => r.status)))], [rows]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (klass !== 'All Classes' && r.klass !== klass) return false;
-      if (status !== 'All Statuses' && r.status !== status) return false;
+      if (klass !== 'Semua Kelas' && r.klass !== klass) return false;
+      if (status !== 'Semua Status' && r.status !== status) return false;
       if (!needle) return true;
       return [r.code, r.name, r.location, r.oem, r.serial].join(' ').toLowerCase().includes(needle);
     });
   }, [rows, q, klass, status]);
 
-  const degraded = rows.filter((r) => r.status === 'DEGRADED' || r.health < 70).length;
-  const openWos = rows.reduce((sum, r) => sum + r.openWos, 0);
-  const activeSrs = rows.reduce((sum, r) => sum + r.activeSrs, 0);
+  const stats = useMemo(() => ({
+    degraded: rows.filter((r) => r.status === 'DEGRADED' || r.health < 70).length,
+    openWos: rows.reduce((sum, r) => sum + r.openWos, 0),
+    activeSrs: rows.reduce((sum, r) => sum + r.activeSrs, 0),
+  }), [rows]);
+  const { degraded, openWos, activeSrs } = stats;
 
   const exportCsv = async () => {
+    if (busyExport) return;
+    setBusyExport(true);
+    try {
     const { saveAsViaPickerOrDownload } = await import('@/lib/download');
     const rows: (string | number)[][] = [
       ['code', 'name', 'class', 'location', 'oem', 'serial', 'health', 'status', 'commissioned_on', 'open_wos', 'total_wos', 'active_srs'],
@@ -57,32 +64,35 @@ export function AssetRegistry({ rows, orgId }: { rows: AssetRow[]; orgId: string
     const csv = await buildCsvViaWorker(rows, ',');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     await saveAsViaPickerOrDownload('asset-registry.csv', blob, 'text/csv');
+    } finally {
+      setBusyExport(false);
+    }
   };
 
   return (
     <>
       <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
-        <Link className="text-muted hover:text-cobalt font-medium" href="/">Home</Link>
+        <Link className="text-muted hover:text-cobalt font-medium" href="/">Beranda</Link>
         <span className="text-muted">/</span>
-        <span className="font-semibold">Asset Registry</span>
+        <span className="font-semibold">Registry Aset</span>
       </nav>
 
       <section className="bg-card border border-border-subtle rounded-lg p-6 flex flex-col gap-4 shadow-card" aria-labelledby="ar-h">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="apex-id text-muted">Lifecycle Ledger · {rows.length} assets live from Postgres · tenant {orgId}</p>
-            <h1 id="ar-h" className="text-2xl font-semibold tracking-tight">Asset Registry</h1>
-            <p className="text-[13px] text-muted">Registered plant with real workload links — WO/SR counts are computed from the database, not painted on.</p>
+            <p className="apex-id text-muted">Buku induk aset · {rows.length} aset</p>
+            <h1 id="ar-h" className="text-2xl font-semibold tracking-tight">Registry Aset</h1>
+            <p className="text-[13px] text-muted">Aset terdaftar dengan beban kerja aktual — jumlah WO/SR dihitung dari database.</p>
           </div>
-          <Button variant="secondary" onClick={exportCsv}><Download size={16} /> Export (CSV)</Button>
+          <Button variant="secondary" onClick={exportCsv} disabled={busyExport}>{busyExport ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />} Ekspor (CSV)</Button>
         </div>
 
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {[
-            { l: 'Registered Assets', v: String(rows.length), s: `classes: ${classes.length - 1}` },
-            { l: 'Degraded / Risk', v: String(degraded), s: 'status DEGRADED or health < 70' },
-            { l: 'Open Work Orders', v: String(openWos), s: 'across all assets (real count)' },
-            { l: 'Active Service Requests', v: String(activeSrs), s: 'OPEN/TRIAGED/BREACHED on assets' },
+            { l: 'Aset Terdaftar', v: String(rows.length), s: `kelas: ${classes.length - 1}` },
+            { l: 'Terdegradasi / Risiko', v: String(degraded), s: 'status DEGRADED atau kesehatan < 70' },
+            { l: 'WO Terbuka', v: String(openWos), s: 'di semua aset' },
+            { l: 'SR Aktif', v: String(activeSrs), s: 'OPEN/TRIAGED/BREACHED pada aset' },
           ].map((k) => (
             <div key={k.l} className="rounded-lg border border-border-subtle bg-surface p-3 flex flex-col gap-0.5">
               <span className="apex-label-caps text-muted">{k.l}</span>
@@ -94,12 +104,12 @@ export function AssetRegistry({ rows, orgId }: { rows: AssetRow[]; orgId: string
 
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by code, name, location, OEM, serial…" aria-label="Filter assets" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter berdasarkan kode, nama, lokasi, OEM, serial…" aria-label="Filter aset" />
           </div>
-          <select value={klass} onChange={(e) => setKlass(e.target.value)} aria-label="Class filter" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
+          <select value={klass} onChange={(e) => setKlass(e.target.value)} aria-label="Filter kelas" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
             {classes.map((s) => <option key={s}>{s}</option>)}
           </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status filter" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter status" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
             {statuses.map((s) => <option key={s}>{s}</option>)}
           </select>
         </div>
@@ -108,13 +118,13 @@ export function AssetRegistry({ rows, orgId }: { rows: AssetRow[]; orgId: string
           <table className="w-full text-[13px] min-w-[980px]">
             <thead>
               <tr className="text-left text-muted border-b border-border-subtle bg-surface">
-                <th className="p-2 font-semibold">Asset</th>
-                <th className="font-semibold">Name / Location</th>
-                <th className="font-semibold">Class</th>
+                <th className="p-2 font-semibold">Aset</th>
+                <th className="font-semibold">Nama / Lokasi</th>
+                <th className="font-semibold">Kelas</th>
                 <th className="font-semibold">OEM · Serial</th>
-                <th className="font-semibold">Health</th>
+                <th className="font-semibold">Kesehatan</th>
                 <th className="font-semibold">Status</th>
-                <th className="font-semibold">Workload</th>
+                <th className="font-semibold">Beban Kerja</th>
                 <th className="font-semibold">Detail</th>
               </tr>
             </thead>
@@ -144,23 +154,23 @@ export function AssetRegistry({ rows, orgId }: { rows: AssetRow[]; orgId: string
                   </td>
                   <td><Badge variant={statusTone(r.status)}>{r.status}</Badge></td>
                   <td className="text-xs tabular-nums">
-                    {r.openWos > 0 ? <span className="font-bold text-warn-ink">{r.openWos} open</span> : <span className="text-muted">0 open</span>}
+                    {r.openWos > 0 ? <span className="font-bold text-warn-ink">{r.openWos} terbuka</span> : <span className="text-muted">0 terbuka</span>}
                     <span className="text-muted"> / {r.totalWos} WO</span>
-                    {r.activeSrs > 0 && <p className="text-[11px] text-cobalt font-semibold">{r.activeSrs} active SR</p>}
+                    {r.activeSrs > 0 && <p className="text-[11px] text-cobalt font-semibold">{r.activeSrs} SR aktif</p>}
                   </td>
                   <td>
-                    <Link className="text-cobalt font-semibold hover:underline text-xs" href={`/assets/${r.code}`}>Open →</Link>
+                    <Link className="text-cobalt font-semibold hover:underline text-xs" href={`/assets/${r.code}`}>Buka →</Link>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="p-6 text-center text-muted">No assets match — clear filters.</td></tr>
+                <tr><td colSpan={8} className="p-6 text-center text-muted">Tidak ada aset yang cocok — ubah filter.</td></tr>
               )}
             </tbody>
           </table>
         </div>
         <p className="text-xs text-muted" role="status">
-          Showing {filtered.length} of {rows.length} assets · live from Postgres · tenant {orgId} · registry edits (health, BOM) arrive with the inventory slice — no fake mutations here.
+          Menampilkan {filtered.length} dari {rows.length} aset · perubahan registry (kesehatan, BOM) menyusul di modul inventaris.
         </p>
       </section>
     </>

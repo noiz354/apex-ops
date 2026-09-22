@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -10,10 +10,16 @@ let seq = 1;
 
 export function useFieldToasts() {
   const [toasts, setToasts] = useState<FieldToast[]>([]);
+  const timers = useRef<number[]>([]);
   const push = useCallback((ok: boolean, title: string, msg: string) => {
     const id = seq++;
-    setToasts((t) => [...t, { id, ok, title, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000);
+    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
+    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000);
+    timers.current.push(timer);
+  }, []);
+  useEffect(() => () => {
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = [];
   }, []);
   return { toasts, push };
 }

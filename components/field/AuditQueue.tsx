@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { ClipboardList, CloudUpload, Inbox, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CANON, wibNow } from '@/lib/canon';
 import { cn } from '@/lib/utils';
 import { apiFetch } from '@/lib/api/client';
 import { listOutbox } from '@/lib/offline/outbox';
@@ -34,27 +33,27 @@ interface Audit {
 
 const AUDITS_DEMO: Audit[] = [
   {
-    id: CANON.inspection,
-    title: 'Weekly Chiller Run-Check · Chiller #04',
-    sub: `${CANON.assetSeal} · ${CANON.assetOem} · Step 2 of 4`,
-    pill: '1 CRITICAL DEFECT',
+    id: 'INS-2026-0412',
+    title: 'Run-Check Chiller Mingguan · Chiller #04',
+    sub: 'AST-HVAC-004 · Trane EarthWise CVHE · Langkah 2 dari 4',
+    pill: '1 DEFECT KRITIS',
     pillTone: 'fail',
-    progress: CANON.inspectionProgress,
-    foot: 'Due 15:30 WIB · Tap to resume run',
+    progress: 65,
+    foot: 'Jatuh tempo 15:30 WIB · Ketuk untuk lanjutkan',
     critical: true,
   },
   {
     id: 'INS-2026-0415',
-    title: 'Pump Room Walkdown · #B-201 Emer Gen Vault',
-    sub: 'Not started · 6 checkpoints · est. 25 min',
-    pill: 'DUE 16:00',
+    title: 'Walkdown Ruang Pompa · #B-201 Emer Gen Vault',
+    sub: 'Belum mulai · 6 checkpoint · est. 25 mnt',
+    pill: 'JATUH TEMPO 16:00',
     pillTone: 'warn',
   },
   {
     id: 'INS-2026-0418',
-    title: 'AHU Filter Bank Inspection · Level 12',
-    sub: 'Not started · 4 checkpoints · est. 15 min',
-    pill: 'QUEUED',
+    title: 'Inspeksi Filter Bank AHU · Lantai 12',
+    sub: 'Belum mulai · 4 checkpoint · est. 15 mnt',
+    pill: 'ANTRE',
     pillTone: 'pass',
   },
 ];
@@ -68,18 +67,18 @@ const pillTone: Record<Audit['pillTone'], string> = {
 function toCard(r: ServerAudit): Audit {
   const st = r.status.toUpperCase();
   if (st === 'COMPLETED') {
-    return { id: r.number, title: r.title, sub: `${r.auditorName} · completed`, pill: 'DONE', pillTone: 'pass', progress: 100 };
+    return { id: r.number, title: r.title, sub: `${r.auditorName} · selesai`, pill: 'SELESAI', pillTone: 'pass', progress: 100 };
   }
   if (st === 'OVERDUE') {
-    return { id: r.number, title: r.title, sub: `${r.auditorName} · overdue`, pill: 'OVERDUE', pillTone: 'fail', progress: r.progressPct };
+    return { id: r.number, title: r.title, sub: `${r.auditorName} · terlambat`, pill: 'TERLAMBAT', pillTone: 'fail', progress: r.progressPct };
   }
   if (st === 'SCHEDULED') {
-    return { id: r.number, title: r.title, sub: `${r.auditorName} · scheduled`, pill: 'QUEUED', pillTone: 'pass' };
+    return { id: r.number, title: r.title, sub: `${r.auditorName} · terjadwal`, pill: 'ANTRE', pillTone: 'pass' };
   }
   return {
-    id: r.number, title: r.title, sub: `${r.auditorName} · in progress`,
-    pill: 'IN PROGRESS', pillTone: 'warn', progress: r.progressPct,
-    foot: `Tap to resume run`,
+    id: r.number, title: r.title, sub: `${r.auditorName} · berjalan`,
+    pill: 'BERJALAN', pillTone: 'warn', progress: r.progressPct,
+    foot: `Ketuk untuk lanjutkan`,
   };
 }
 
@@ -113,7 +112,7 @@ export function AuditQueue() {
         setCompleted([]);
         setLive(false);
         setLoading(false);
-        push(false, 'Offline', 'Audit list served from demo fallback. Changes queue to Sync.');
+        push(false, 'Luring', 'Daftar audit dari fallback demo. Perubahan antre ke Sinkron.');
       });
     return () => { alive = false; };
   }, []);
@@ -135,16 +134,16 @@ export function AuditQueue() {
               <path d="M12 28H24" stroke="#93C5FD" strokeWidth="2" strokeLinecap="round" />
             </svg>
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold font-display leading-tight truncate">My Audits</h1>
+              <h1 className="text-lg font-semibold font-display leading-tight truncate">Audit Saya</h1>
               <p className="text-xs text-muted truncate">
-                E. Voronova · Shift A · {CANON.tenant} · {live ? 'Live server list' : 'Demo offline'}
+                E. Voronova · Shift A · {live ? 'Daftar server' : 'Demo luring'}
               </p>
             </div>
           </div>
           <Link
             href="/field/sync"
             className="relative min-w-[48px] min-h-[48px] flex items-center justify-center rounded border-2 border-slate900 bg-white"
-            aria-label={`Sync status, ${syncCount} items pending`}
+            aria-label={`Status sinkron, ${syncCount} item antre`}
           >
             <CloudUpload size={24} />
             <span className="absolute -top-2 -right-2 px-1 rounded bg-fail text-white text-[11px] leading-tight font-bold min-w-[20px] text-center">{syncCount}</span>
@@ -160,14 +159,14 @@ export function AuditQueue() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Filter audits by ID or title…"
-            aria-label="Filter audits"
+            placeholder="Filter audit berdasar ID atau judul…"
+            aria-label="Filter audit"
             className="min-h-[48px] pl-10 text-base border-2 focus:border-slate900 focus:ring-0"
           />
         </div>
 
         {loading ? (
-          <div className="flex flex-col gap-2" aria-label="Loading audits">
+          <div className="flex flex-col gap-2" aria-label="Memuat audit">
             <Skeleton className="h-24 rounded border-2 border-border-strong" />
             <Skeleton className="h-24 rounded border-2 border-border-strong" />
             <Skeleton className="h-24 rounded border-2 border-border-strong" />
@@ -175,14 +174,14 @@ export function AuditQueue() {
         ) : rows.length === 0 ? (
           <div className="rounded border-2 border-dashed border-hold bg-white p-6 text-center flex flex-col items-center gap-2">
             <Inbox size={36} className="text-muted" />
-            <p className="text-lg font-semibold font-display">No matching audits</p>
-            <p className="text-sm text-muted">No assigned run matches “{q}”.</p>
+            <p className="text-lg font-semibold font-display">Tidak ada audit yang cocok</p>
+            <p className="text-sm text-muted">Tidak ada run yang cocok “{q}”.</p>
             <Link href="/field/sync" className="min-h-[48px] inline-flex items-center px-4 rounded bg-slate900 text-white text-sm font-bold">
-              Open Sync Queue
+              Buka Antrean Sinkron
             </Link>
           </div>
         ) : (
-          <ul className="flex flex-col gap-2" aria-label="Assigned audits">
+          <ul className="flex flex-col gap-2" aria-label="Audit yang ditugaskan">
             {rows.map((a) => (
               <li key={a.id}>
                 <Link
@@ -202,9 +201,9 @@ export function AuditQueue() {
                       {/* GAP-15 (F18): run route only renders the checklist for the
                           canonical inspection — other audits land on an honest
                           "TODO Fase 2" EmptyState, so the card says so upfront. */}
-                      {a.id !== CANON.inspection && (
+                      {a.id !== 'INS-2026-0412' && (
                         <span className="text-xs font-bold text-warn border border-warn bg-warn-bg px-2 py-0.5 rounded self-start">
-                          Phase 2 · run checklist not available yet
+                          Fase 2 · checklist run belum tersedia
                         </span>
                       )}
                       <span className="text-lg font-semibold font-display">{a.title}</span>
@@ -227,20 +226,20 @@ export function AuditQueue() {
         )}
 
         {lastDone && (
-          <section className="rounded border-2 border-slate900 bg-white shadow-hard p-3 flex flex-col gap-2" aria-label="Last completed run">
+          <section className="rounded border-2 border-slate900 bg-white shadow-hard p-3 flex flex-col gap-2" aria-label="Run terakhir selesai">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold font-display">Last Completed Run</h2>
+              <h2 className="text-lg font-semibold font-display">Run Terakhir Selesai</h2>
               <span className="text-xs font-bold text-pass border border-pass bg-pass-bg px-2 py-0.5 rounded">COMPLETED</span>
             </div>
             <p className="text-sm">
               <span className="apex-id font-bold">{lastDone.number}</span> · {lastDone.title} · {lastDone.auditorName}
             </p>
-            <p className="text-xs text-muted">Recorded in the inspection ledger {wibNow()} WIB · server status {lastDone.status}</p>
+            <p className="text-xs text-muted">Tercatat di ledger inspeksi {new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} WIB · status server {lastDone.status}</p>
           </section>
         )}
 
         <p className="text-xs text-muted flex items-center gap-1">
-          <ClipboardList size={14} /> {audits.length} assigned · Shift A {CANON.shiftA} {live ? '(live)' : '(demo)'}
+          <ClipboardList size={14} /> {audits.length} ditugaskan · Shift A 07:00–15:30 WIB {live ? '(live)' : '(demo)'}
         </p>
       </main>
 

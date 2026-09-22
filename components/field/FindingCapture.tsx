@@ -13,7 +13,6 @@ import {
   ScanLine,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { CANON } from '@/lib/canon';
 import { cn } from '@/lib/utils';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import { enqueueOutbox } from '@/lib/offline/outbox';
@@ -34,7 +33,7 @@ export function FindingCapture() {
   const router = useRouter();
   const { toasts, push } = useFieldToasts();
 
-  const [asset, setAsset] = useState<string>(CANON.assetSeal);
+  const [asset, setAsset] = useState<string>('AST-HVAC-004');
   const [zone, setZone] = useState('Basement Mech Room B-204');
   const [severity, setSeverity] = useState<Severity>('CRITICAL');
   const [title, setTitle] = useState('');
@@ -74,11 +73,11 @@ export function FindingCapture() {
   const startScan = async () => {
     setScanError(null);
     if (!hasBarcodeDetector()) {
-      push(false, 'Scanner unavailable', 'BarcodeDetector not supported in this browser — enter the asset tag manually.');
+      push(false, 'Pemindai tidak tersedia', 'BarcodeDetector tidak didukung browser ini — ketik tag aset manual.');
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      push(false, 'Camera unavailable', 'This device exposes no camera stream — enter the asset tag manually.');
+      push(false, 'Kamera tidak tersedia', 'Perangkat ini tidak punya aliran kamera — ketik tag aset manual.');
       return;
     }
 
@@ -117,22 +116,22 @@ export function FindingCapture() {
         const code = normalizeScannedAssetCode(hit.rawValue);
         setAsset(code);
         haptic.pass();
-        push(true, 'Barcode decoded', `Format ${hit.format} · ${code} — verify against the physical tag before submitting.`);
+        push(true, 'Barcode terbaca', `Format ${hit.format} · ${code} — cocokkan dengan tag fisik sebelum kirim.`);
       } else {
-        push(false, 'Scan ended', 'No confirmed code (timeout/cancelled) — aim at the tag again or type it manually.');
+        push(false, 'Pindaian selesai', 'Tidak ada kode terkonfirmasi (timeout/batal) — arahkan ke tag lagi atau ketik manual.');
       }
     } catch (err) {
       stopScan();
       const name = err instanceof DOMException ? err.name : '';
       if (name === 'NotAllowedError' || name === 'SecurityError') {
-        setScanError('Camera permission denied — enter the asset tag manually.');
-        push(false, 'Camera denied', 'Grant camera permission to scan, or type the asset tag manually.');
+        setScanError('Izin kamera ditolak — ketik tag aset manual.');
+        push(false, 'Kamera ditolak', 'Beri izin kamera untuk memindai, atau ketik tag aset manual.');
       } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-        setScanError('No usable camera found — enter the asset tag manually.');
-        push(false, 'No camera', 'No usable camera on this device — type the asset tag manually.');
+        setScanError('Tidak ada kamera yang bisa dipakai — ketik tag aset manual.');
+        push(false, 'Tanpa kamera', 'Perangkat ini tidak punya kamera — ketik tag aset manual.');
       } else {
-        setScanError('Camera failed to start — enter the asset tag manually.');
-        push(false, 'Camera failed', err instanceof Error ? err.message : 'Unknown camera error.');
+        setScanError('Kamera gagal dinyalakan — ketik tag aset manual.');
+        push(false, 'Kamera gagal', err instanceof Error ? err.message : 'Kesalahan kamera tak dikenal.');
       }
     }
   };
@@ -149,13 +148,13 @@ export function FindingCapture() {
       setHasPhoto(true);
       push(
         true,
-        'Photo Attached',
+        'Foto Terlampir',
         prep.sha256Hash
-          ? `${prep.fileName} · SHA-256 verified locally${prep.wasResized ? ' · resized ≤1600px for upload' : ''}.`
-          : `${prep.fileName} attached (hashing unavailable — server will compute).`,
+          ? `${prep.fileName} · SHA-256 terverifikasi lokal${prep.wasResized ? ' · dikecilkan ≤1600px untuk upload' : ''}.`
+          : `${prep.fileName} terlampir (hash tak tersedia — server yang menghitung).`,
       );
     } catch {
-      push(false, 'Photo Failed', 'Could not read that file — try another capture.');
+      push(false, 'Foto Gagal', 'File itu tidak bisa dibaca — coba ambil lagi.');
     }
   };
 
@@ -168,7 +167,7 @@ export function FindingCapture() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      push(false, 'Validation Error', 'Finding title is required.');
+      push(false, 'Validasi Gagal', 'Judul temuan wajib diisi.');
       return;
     }
 
@@ -183,7 +182,7 @@ export function FindingCapture() {
     setSubmitting(true);
     try {
       const data = await apiFetch<{ id: string }>('/api/findings', { method: 'POST', body });
-      push(true, 'Finding Captured', `${data.id} recorded — persisted via /api/findings.`);
+      push(true, 'Temuan Tercatat', `${data.id} tersimpan — via /api/findings.`);
       setTimeout(() => router.push('/field/audits'), 900);
     } catch (err) {
       if (err instanceof ApiError && (err.code === 'NETWORK' || err.code === 'TIMEOUT')) {
@@ -194,10 +193,10 @@ export function FindingCapture() {
           body,
           idempotencyKey: crypto.randomUUID(),
         });
-        push(true, 'Offline — Finding Queued', 'Stored on-device with its idempotency key. Replay from the Sync tab when the link returns.');
+        push(true, 'Offline — Temuan Diantrekan', 'Tersimpan di perangkat dengan idempotency key. Putar ulang dari tab Sinkron saat koneksi kembali.');
         if (navigator.onLine) setTimeout(() => router.push('/field/sync'), 1200);
       } else {
-        push(false, 'Capture Rejected', err instanceof ApiError ? `${err.message} (${err.code})` : 'Unexpected failure — finding NOT recorded. Retry.');
+        push(false, 'Gagal Mencatat', err instanceof ApiError ? `${err.message} (${err.code})` : 'Gagal tak terduga — temuan TIDAK tercatat. Coba lagi.');
       }
     } finally {
       setSubmitting(false);
@@ -213,17 +212,17 @@ export function FindingCapture() {
             <Link
               href="/field/audits"
               className="w-10 h-10 flex items-center justify-center rounded border-2 border-slate900 bg-white active:scale-95"
-              aria-label="Back to Audits"
+              aria-label="Kembali ke Audit"
             >
               <ArrowLeft size={20} />
             </Link>
             <div>
-              <h1 className="text-lg font-bold font-display leading-tight">Log Field Finding</h1>
-              <p className="text-xs text-muted truncate">E. Voronova · {CANON.shiftA}</p>
+              <h1 className="text-lg font-bold font-display leading-tight">Catat Temuan Lapangan</h1>
+              <p className="text-xs text-muted truncate">E. Voronova · {'07:00–15:30 WIB'}</p>
             </div>
           </div>
           <span className="px-2 py-0.5 rounded border-2 border-fail bg-fail-bg text-fail text-[11px] font-bold">
-            DEFECT CAPTURE
+            TANGKAP CACAT
           </span>
         </div>
       </header>
@@ -234,15 +233,15 @@ export function FindingCapture() {
           {/* Target Asset & Barcode Scan */}
           <div className="rounded border-2 border-slate900 bg-white p-4 shadow-hard flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted">Target Asset</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-muted">Aset Target</span>
               <button
                 type="button"
                 onClick={scanning ? stopScan : startScan}
                 disabled={!hasBarcodeDetector() && !scanning}
                 className="text-xs font-bold text-cobalt flex items-center gap-1 active:scale-95 disabled:text-muted"
-                title={!hasBarcodeDetector() ? 'BarcodeDetector not supported — type the tag manually' : undefined}
+                title={!hasBarcodeDetector() ? 'BarcodeDetector tidak didukung — ketik tag manual' : undefined}
               >
-                <ScanLine size={14} /> {scanning ? 'Stop Scan' : 'Scan Barcode / QR'}
+                <ScanLine size={14} /> {scanning ? 'Hentikan Pindai' : 'Pindai Barcode / QR'}
               </button>
             </div>
             {(scanning || scanError) && (
@@ -250,13 +249,13 @@ export function FindingCapture() {
                 <div ref={videoWrapRef} aria-live="polite" />
                 {scanError && <p className="text-xs font-semibold text-fail" role="alert">{scanError}</p>}
                 {scanning && (
-                  <p className="text-xs text-muted">Aim at the asset tag — Code-128/QR/Data Matrix. Auto-stops after 45s.</p>
+                  <p className="text-xs text-muted">Arahkan ke tag aset — Code-128/QR/Data Matrix. Berhenti otomatis setelah 45 dtk.</p>
                 )}
               </>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] font-semibold text-muted block mb-1">Asset Tag</label>
+                <label className="text-[11px] font-semibold text-muted block mb-1">Tag Aset</label>
                 <Input
                   value={asset}
                   onChange={(e) => setAsset(e.target.value)}
@@ -265,7 +264,7 @@ export function FindingCapture() {
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-muted block mb-1">Zone / Room Location</label>
+                <label className="text-[11px] font-semibold text-muted block mb-1">Zona / Lokasi Ruangan</label>
                 <Input
                   value={zone}
                   onChange={(e) => setZone(e.target.value)}
@@ -278,7 +277,7 @@ export function FindingCapture() {
 
           {/* Criticality / Severity Selector */}
           <div className="rounded border-2 border-slate900 bg-white p-4 shadow-hard flex flex-col gap-2.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">Defect Severity</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">Tingkat Keparahan</span>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {(
                 [
@@ -305,31 +304,31 @@ export function FindingCapture() {
             {severity === 'CRITICAL' && (
               <p className="text-xs text-fail font-semibold flex items-center gap-1 mt-1">
                 <AlertOctagon size={14} />
-                Critical findings trigger automatic Work Order escalation &amp; safety review.
+                Temuan kritis memicu eskalasi Work Order otomatis &amp; tinjauan keselamatan.
               </p>
             )}
           </div>
 
           {/* Finding Details */}
           <div className="rounded border-2 border-slate900 bg-white p-4 shadow-hard flex flex-col gap-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">Defect Description</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">Deskripsi Cacat</span>
             <div>
-              <label className="text-[11px] font-semibold text-muted block mb-1">Finding Title *</label>
+              <label className="text-[11px] font-semibold text-muted block mb-1">Judul Temuan *</label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Refrigerant Leak on Compressor Shaft Seal"
+                placeholder="mis. Kebocoran Refrigeran pada Seal Poros Kompresor"
                 className="text-base font-semibold border-2 focus:border-slate900"
                 required
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-muted block mb-1">Detailed Observations</label>
+              <label className="text-[11px] font-semibold text-muted block mb-1">Observasi Detail</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                placeholder="Describe leak rate, pressure gauge reading, audible hissing, or visual defect..."
+                placeholder="Jelaskan laju bocor, bacaan gauge tekanan, desis terdengar, atau cacat visual..."
                 className="w-full p-2.5 rounded border-2 border-border-strong text-sm focus:border-slate900 outline-none"
               />
             </div>
@@ -339,10 +338,10 @@ export function FindingCapture() {
           <div className="rounded border-2 border-slate900 bg-white p-4 shadow-hard flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-muted">
-                Mandatory Evidence Media
+                Media Bukti Wajib
               </span>
               <span className="font-mono text-[10px] text-muted">
-                GPS: {gpsCoords ? `${formatCoords(gpsCoords)} (device)` : 'zone default — manual'}
+                GPS: {gpsCoords ? `${formatCoords(gpsCoords)} (perangkat)` : 'default zona — manual'}
               </span>
             </div>
 
@@ -353,11 +352,11 @@ export function FindingCapture() {
                     <CheckCircle2 size={24} />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-bold font-display truncate">{photoInfo?.name ?? 'Evidence photo'}</span>
+                    <span className="text-sm font-bold font-display truncate">{photoInfo?.name ?? 'Foto bukti'}</span>
                     <span className="text-xs font-mono text-muted truncate">
-                      {photoInfo?.hash ? `SHA-256 ${photoInfo.hash.slice(0, 12)}… verified locally` : 'server will compute hash'}
+                      {photoInfo?.hash ? `SHA-256 ${photoInfo.hash.slice(0, 12)}… terverifikasi lokal` : 'server yang menghitung hash'}
                       {gpsCoords ? ` · GPS ${formatCoords(gpsCoords)}` : ''}
-                      {photoInfo?.resized ? ' · resized ≤1600px' : ''}
+                      {photoInfo?.resized ? ' · dikecilkan ≤1600px' : ''}
                     </span>
                   </div>
                 </div>
@@ -369,7 +368,7 @@ export function FindingCapture() {
                   }}
                   className="text-xs text-fail font-bold hover:underline shrink-0"
                 >
-                  Retake
+                  Ambil Ulang
                 </button>
               </div>
             ) : (
@@ -381,8 +380,8 @@ export function FindingCapture() {
                 <div className="w-12 h-12 rounded-full bg-slate900 text-white flex items-center justify-center">
                   <Camera size={22} />
                 </div>
-                <span className="text-sm font-bold font-display">Capture Evidence Photo</span>
-                <span className="text-xs text-muted">Opens device camera/picker · hashed + resized on-device before upload</span>
+                <span className="text-sm font-bold font-display">Ambil Foto Bukti</span>
+                <span className="text-xs text-muted">Buka kamera/pemilih perangkat · di-hash + dikecilkan di perangkat sebelum upload</span>
               </button>
             )}
             <input
@@ -391,14 +390,14 @@ export function FindingCapture() {
               accept="image/*"
               capture="environment"
               className="hidden"
-              aria-label="Capture evidence photo"
+              aria-label="Ambil foto bukti"
               onChange={onPickPhoto}
             />
           </div>
 
           {/* Safety & Lockout Guardrails */}
           <div className="rounded border-2 border-slate900 bg-white p-4 shadow-hard flex flex-col gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">Safety Protocols</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">Protokol Keselamatan</span>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -407,7 +406,7 @@ export function FindingCapture() {
                 className="w-4 h-4 accent-slate900 rounded"
               />
               <span className="text-sm font-semibold flex items-center gap-1.5">
-                <Lock size={14} className="text-fail" /> Hazardous Energy Lockout (LOTO #4092) Required
+                <Lock size={14} className="text-fail" /> Lockout Energi Berbahaya (LOTO #4092) Diperlukan
               </span>
             </label>
           </div>
@@ -419,7 +418,7 @@ export function FindingCapture() {
                 type="button"
                 className="w-full min-h-[52px] rounded border-2 border-slate900 bg-white text-body text-base font-bold active:scale-95"
               >
-                Cancel
+                Batal
               </button>
             </Link>
             <button
@@ -427,7 +426,7 @@ export function FindingCapture() {
               disabled={submitting}
               className="flex-1 min-h-[52px] rounded border-2 border-slate900 bg-fail text-white text-base font-bold shadow-hard active:scale-95 disabled:opacity-50"
             >
-              {submitting ? 'Recording…' : 'Submit Finding'}
+              {submitting ? 'Mencatat…' : 'Kirim Temuan'}
             </button>
           </div>
         </form>

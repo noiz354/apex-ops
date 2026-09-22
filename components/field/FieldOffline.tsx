@@ -20,8 +20,8 @@ export function FieldOffline({ queueHref = '/field/sync' }: { queueHref?: string
   if (online) return null;
   return (
     <OfflineBanner>
-      Offline — drafts queue locally.{' '}
-      <Link className="underline font-bold" href={queueHref}>Sync queue</Link>
+      Luring — draf antre lokal.{' '}
+      <Link className="underline font-bold" href={queueHref}>Antrean sinkron</Link>
     </OfflineBanner>
   );
 }

@@ -1,16 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Download, Plus, X, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, LoaderCircle, Plus, X, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { TableSkeleton } from '@/components/ui/skeleton';
-import { CANON } from '@/lib/canon';
 import { cn } from '@/lib/utils';
-import { downloadText } from '@/lib/download';
 import { ApiError, apiFetch } from '@/lib/api/client';
 
 interface ServerLine {
@@ -42,9 +40,9 @@ interface Doc {
 }
 
 const SEED: Doc[] = [
-  { id: CANON.purchaseOrder, kind: 'PO', title: 'Silicon Carbide Shaft Seal 2.5" Kit replenishment', vendor: 'Trane Supply Co', vendorSlug: CANON.vendorSlug, amount: '$2,900.00', amountCents: 290000, req: '—', status: 'DISPATCHED · DOCK BAY 02', note: 'P1 SLA · GRN-9941 · INV-2026-1188', seeded: true },
-  { id: 'PR-2026-0314', kind: 'PR', title: '—', vendor: 'Trane EarthWise Direct', vendorSlug: CANON.vendorSlug, amount: '—', amountCents: 0, req: '—', status: 'ENDORSED → PO-2026-0315', note: 'Endorsed 13:41 WIB · POST pr-0314/endorse' },
-  { id: 'PO-2026-0315', kind: 'PO', title: '—', vendor: 'Trane Co.', vendorSlug: CANON.vendorSlug, amount: '—', amountCents: 0, req: '—', status: 'DISPATCHED', note: 'Per authorize demo string (JS-only source)' },
+  { id: 'PO-2026-0298', kind: 'PO', title: 'Silicon Carbide Shaft Seal 2.5" Kit replenishment', vendor: 'Trane Supply Co', vendorSlug: 'trane-technologies', amount: '$2,900.00', amountCents: 290000, req: '—', status: 'DISPATCHED · DOCK BAY 02', note: 'P1 SLA · GRN-9941 · INV-2026-1188', seeded: true },
+  { id: 'PR-2026-0314', kind: 'PR', title: '—', vendor: 'Trane EarthWise Direct', vendorSlug: 'trane-technologies', amount: '—', amountCents: 0, req: '—', status: 'ENDORSED → PO-2026-0315', note: 'Endorsed 13:41 WIB · POST pr-0314/endorse' },
+  { id: 'PO-2026-0315', kind: 'PO', title: '—', vendor: 'Trane Co.', vendorSlug: 'trane-technologies', amount: '—', amountCents: 0, req: '—', status: 'DISPATCHED', note: 'Per authorize demo string (JS-only source)' },
   { id: 'PR-2026-0309', kind: 'PR', title: '10 Pails POE Synthetic Lubricant', vendor: 'Mobil Aero Fluids', amount: '$1,950.00', amountCents: 195000, req: 'J. Thorne · Lube Specialist', status: 'CONVERTED → PO-2026-0302' },
   { id: 'PO-2026-0302', kind: 'PO', title: '10 Pails POE Synthetic Lubricant', vendor: 'Mobil Aero Fluids', amount: '$1,950.00', amountCents: 195000, req: 'J. Thorne · Lube Specialist', status: 'CREATED', note: '10 × $195.00/pail' },
   { id: 'PO-2026-0285', kind: 'PO', title: '2000kVA Bushing Kits · ELEC-TR-880', vendor: 'ABB Grid Power Services', vendorSlug: 'abb-grid-power-automation', amount: '$28,400.00', amountCents: 2840000, req: 'E. Vance · Chief Electrical', status: 'PARTIAL' },
@@ -70,7 +68,6 @@ function toDoc(d: ServerDoc): Doc {
 interface Toast { id: number; ok: boolean; title: string; msg: string }
 let toastSeq = 1800;
 
-const download = (filename: string, text: string) => downloadText(filename, text);
 const fmtUsd = (c: number) => `$${(c / 100).toFixed(2)}`;
 
 export function PurchaseList() {
@@ -78,9 +75,11 @@ export function PurchaseList() {
   const [dirState, setDirState] = useState<'loading' | 'live' | 'demo'>('loading');
   const [dirError, setDirError] = useState('');
   const [q, setQ] = useState('');
-  const [kind, setKind] = useState('All Types');
-  const [status, setStatus] = useState('All Statuses');
+  const [kind, setKind] = useState('Semua Jenis');
+  const [status, setStatus] = useState('Semua Status');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastTimers = useRef<number[]>([]);
+  const [busyExport, setBusyExport] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [nwTitle, setNwTitle] = useState('');
   const [nwVendor, setNwVendor] = useState('');
@@ -92,12 +91,18 @@ export function PurchaseList() {
 
   const push = (ok: boolean, title: string, msg: string) => {
     const id = toastSeq++;
-    setToasts((t) => [...t, { id, ok, title, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
+    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
+    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
+    toastTimers.current.push(timer);
   };
 
+  useEffect(() => () => {
+    toastTimers.current.forEach((t) => window.clearTimeout(t));
+    toastTimers.current = [];
+  }, []);
+
   const errMsg = (e: unknown) =>
-    e instanceof ApiError ? `${e.message} (${e.code})` : 'Unexpected error — nothing was submitted.';
+    e instanceof ApiError ? `${e.message} (${e.code})` : 'Kesalahan tak terduga — tidak ada yang dikirim.';
 
   const refresh = useCallback(async () => {
     setDirState('loading');
@@ -115,25 +120,42 @@ export function PurchaseList() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const filtered = rows.filter((r) => {
-    if (kind !== 'All Types' && r.kind !== kind) return false;
-    if (status !== 'All Statuses' && r.status !== status) return false;
+  const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return !needle || `${r.id} ${r.title} ${r.vendor} ${r.req}`.toLowerCase().includes(needle);
-  });
+    return rows.filter((r) => {
+      if (kind !== 'Semua Jenis' && r.kind !== kind) return false;
+      if (status !== 'Semua Status' && r.status !== status) return false;
+      return !needle || `${r.id} ${r.title} ${r.vendor} ${r.req}`.toLowerCase().includes(needle);
+    });
+  }, [rows, q, kind, status]);
 
   const live = dirState === 'live';
-  const statuses = ['All Statuses', ...Array.from(new Set(rows.map((r) => r.status)))];
-  const openValue = rows.filter((r) => r.kind === 'PO' && !TERMINAL.has(r.status))
-    .reduce((a, r) => a + r.amountCents, 0);
-  const partial = rows.filter((r) => r.status === 'PARTIAL').length;
-  const rejected = rows.filter((r) => r.status.startsWith('REJECTED')).length;
+  const statuses = useMemo(() => ['Semua Status', ...Array.from(new Set(rows.map((r) => r.status)))], [rows]);
+  const stats = useMemo(() => ({
+    openValue: rows.filter((r) => r.kind === 'PO' && !TERMINAL.has(r.status))
+      .reduce((a, r) => a + r.amountCents, 0),
+    partial: rows.filter((r) => r.status === 'PARTIAL').length,
+    rejected: rows.filter((r) => r.status.startsWith('REJECTED')).length,
+  }), [rows]);
+  const { openValue, partial, rejected } = stats;
 
-  const exportCsv = () => {
-    const head = 'id,type,title,vendor,amount,requestor,status';
-    const body = filtered.map((r) => [`"${r.id}"`, r.kind, `"${r.title}"`, `"${r.vendor}"`, `"${r.amount}"`, `"${r.req}"`, `"${r.status}"`].join(','));
-    download('purchasing-documents.csv', [head, ...body].join('\n'));
-    push(true, 'Documents exported', `${filtered.length} records → purchasing-documents.csv (${live ? 'live server data' : 'demo data — server unreachable'}).`);
+  const exportCsv = async () => {
+    if (busyExport) return;
+    setBusyExport(true);
+    try {
+    const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+    const table: (string | number)[][] = [
+      ['id', 'type', 'title', 'vendor', 'amount', 'requestor', 'status'],
+      ...filtered.map((r) => [r.id, r.kind, r.title, r.vendor, r.amount, r.req, r.status]),
+    ];
+    const csv = await buildCsvViaWorker(table, ',');
+    await saveAsViaPickerOrDownload('purchasing-documents.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+    push(true, 'Ekspor berhasil', `${filtered.length} dokumen → purchasing-documents.csv (${live ? 'data server' : 'data demo — server tidak terjangkau'}).`);
+    } catch {
+      push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
+    } finally {
+      setBusyExport(false);
+    }
   };
 
   const qtyNum = parseInt(nwQty, 10);
@@ -163,9 +185,9 @@ export function PurchaseList() {
       setNewOpen(false);
       setNwTitle(''); setNwVendor(''); setNwSku(''); setNwQty('1'); setNwPrice('');
       setNwTouched(false);
-      push(true, 'Requisition submitted', `${pr.number} · PENDING_APPROVAL · recorded server-side.`);
+      push(true, 'Requisition terkirim', `${pr.number} · PENDING_APPROVAL · tercatat di server.`);
     } catch (e) {
-      push(false, 'Requisition failed', errMsg(e));
+      push(false, 'Requisition gagal', errMsg(e));
     } finally {
       setCreating(false);
     }
@@ -179,7 +201,7 @@ export function PurchaseList() {
   return (
     <>
       <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
-        <Link className="text-muted hover:text-cobalt font-medium" href="/">Home</Link>
+        <Link className="text-muted hover:text-cobalt font-medium" href="/">Beranda</Link>
         <span className="text-muted">/</span>
         <span className="font-semibold">Purchasing</span>
       </nav>
@@ -188,54 +210,54 @@ export function PurchaseList() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="apex-id text-muted">
-              Procurement Documents · {rows.length} {live ? 'live server records' : 'demo records'} (PO + PR)
+              Dokumen Procurement · {rows.length} {live ? 'data server' : 'data demo'} (PO + PR)
               {' '}<Badge variant={live ? 'pass' : 'warn'}>{live ? 'Live directory' : 'Demo offline'}</Badge>
             </p>
             <h1 id="po-h" className="text-2xl font-semibold tracking-tight">Purchasing</h1>
-            <p className="text-[13px] text-muted">Requisitions to dispatched orders — endorsement chain, partial receipts, and rejections.</p>
+            <p className="text-[13px] text-muted">Requisition hingga order terkirim — rantai endorsement, penerimaan parsial, dan penolakan.</p>
             {dirState === 'demo' && (
               <p className="text-xs text-warn font-semibold mt-1" role="alert">
-                Server unreachable ({dirError}) — showing demo records. Actions are disabled.{' '}
-                <button type="button" className="underline" onClick={() => void refresh()}>Retry</button>
+                Server tidak terjangkau ({dirError}) — menampilkan data demo. Aksi dinonaktifkan.{' '}
+                <button type="button" className="underline" onClick={() => void refresh()}>Coba lagi</button>
               </p>
             )}
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <Button variant="secondary" onClick={exportCsv}><Download size={16} /> Export (CSV)</Button>
+            <Button variant="secondary" onClick={exportCsv} disabled={busyExport}>{busyExport ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />} Ekspor (CSV)</Button>
             <Dialog open={newOpen} onOpenChange={setNewOpen}>
               <DialogTrigger asChild>
-                <Button disabled={!live}><Plus size={16} /> New Requisition</Button>
+                <Button disabled={!live}><Plus size={16} /> Requisition Baru</Button>
               </DialogTrigger>
               <DialogContent aria-labelledby="np-h">
-                <DialogTitle id="np-h">New Purchase Requisition</DialogTitle>
-                <DialogDescription>Creates a PENDING_APPROVAL PR server-side (requires po.approve).</DialogDescription>
-                <label className="text-xs font-semibold" htmlFor="np-t">Title (required, min 3)</label>
-                <Input id="np-t" value={nwTitle} onChange={(e) => setNwTitle(e.target.value)} invalid={nwTouched && nwTitle.trim().length < 3} placeholder="e.g. MERV 14 filter box — AHU-02" />
+                <DialogTitle id="np-h">Requisition Pembelian Baru</DialogTitle>
+                <DialogDescription>Membuat PR PENDING_APPROVAL di server (butuh po.approve).</DialogDescription>
+                <label className="text-xs font-semibold" htmlFor="np-t">Judul (wajib, min 3)</label>
+                <Input id="np-t" value={nwTitle} onChange={(e) => setNwTitle(e.target.value)} invalid={nwTouched && nwTitle.trim().length < 3} placeholder="mis. Filter box MERV 14 — AHU-02" />
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-0.5">
-                    <label className="text-xs font-semibold" htmlFor="np-v">Vendor slug (optional)</label>
-                    <Input id="np-v" value={nwVendor} onChange={(e) => setNwVendor(e.target.value)} placeholder="e.g. grainger-industrial-supply" />
+                    <label className="text-xs font-semibold" htmlFor="np-v">Slug vendor (opsional)</label>
+                    <Input id="np-v" value={nwVendor} onChange={(e) => setNwVendor(e.target.value)} placeholder="mis. grainger-industrial-supply" />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <label className="text-xs font-semibold" htmlFor="np-s">SKU (required)</label>
-                    <Input id="np-s" value={nwSku} onChange={(e) => setNwSku(e.target.value)} invalid={nwTouched && !nwSku.trim()} placeholder="e.g. PART-SEAL-8821" className="apex-id" />
+                    <label className="text-xs font-semibold" htmlFor="np-s">SKU (wajib)</label>
+                    <Input id="np-s" value={nwSku} onChange={(e) => setNwSku(e.target.value)} invalid={nwTouched && !nwSku.trim()} placeholder="mis. PART-SEAL-8821" className="apex-id" />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <label className="text-xs font-semibold" htmlFor="np-q">Qty (required)</label>
+                    <label className="text-xs font-semibold" htmlFor="np-q">Jml (wajib)</label>
                     <Input id="np-q" value={nwQty} onChange={(e) => setNwQty(e.target.value)} invalid={nwTouched && !(Number.isInteger(qtyNum) && qtyNum > 0)} placeholder="1" className="apex-id" />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <label className="text-xs font-semibold" htmlFor="np-a">Unit price USD (required)</label>
+                    <label className="text-xs font-semibold" htmlFor="np-a">Harga satuan USD (wajib)</label>
                     <Input id="np-a" value={nwPrice} onChange={(e) => setNwPrice(e.target.value)} invalid={nwTouched && !(Number.isFinite(priceNum) && priceNum >= 0)} placeholder="1200.00" className="apex-id" />
                   </div>
                 </div>
                 {nwTouched && !formOk && (
-                  <p className="text-[11px] font-semibold text-fail">Title (min 3) + SKU + qty ≥ 1 + numeric unit price are required.</p>
+                  <p className="text-[11px] font-semibold text-fail">Judul (min 3) + SKU + jml ≥ 1 + harga satuan angka wajib diisi.</p>
                 )}
                 <div className="flex justify-end gap-2">
-                  <Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button>
+                  <Button variant="secondary" onClick={() => setNewOpen(false)}>Batal</Button>
                   <Button onClick={() => void create()} disabled={creating}>
-                    {creating ? 'Submitting…' : `Submit PR (${fmtUsd(Number.isFinite(priceNum) && Number.isInteger(qtyNum) ? priceNum * qtyNum : 0)})`}
+                    {creating ? 'Mengirim…' : `Kirim PR (${fmtUsd(Number.isFinite(priceNum) && Number.isInteger(qtyNum) ? priceNum * qtyNum : 0)})`}
                   </Button>
                 </div>
               </DialogContent>
@@ -245,10 +267,10 @@ export function PurchaseList() {
 
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {[
-            { l: 'Documents', v: String(rows.length), s: live ? 'live server count' : `${rows.length} demo records` },
-            { l: 'Open PO Value', v: live ? fmtUsd(openValue) : '$33,250.00 (demo)', s: live ? 'POs excl. RECEIVED/REJECTED' : '0298 + 0302 + 0285 · 0315 undisclosed' },
-            { l: 'Partial Receipt', v: String(partial), s: live ? 'live server count' : 'Bushing kits · ELEC-TR-880' },
-            { l: 'Rejected', v: String(rejected), s: live ? 'live server count' : 'VP cap · power-tool accessories' },
+            { l: 'Dokumen', v: String(rows.length), s: live ? 'data server' : `${rows.length} data demo` },
+            { l: 'Nilai PO Terbuka', v: live ? fmtUsd(openValue) : '$33,250.00 (demo)', s: live ? 'POs excl. RECEIVED/REJECTED' : '0298 + 0302 + 0285 · 0315 undisclosed' },
+            { l: 'Penerimaan Parsial', v: String(partial), s: live ? 'data server' : 'Bushing kits · ELEC-TR-880' },
+            { l: 'Ditolak', v: String(rejected), s: live ? 'data server' : 'VP cap · power-tool accessories' },
           ].map((k) => (
             <div key={k.l} className="rounded-lg border border-border-subtle bg-surface p-3 flex flex-col gap-0.5">
               <span className="apex-label-caps text-muted">{k.l}</span>
@@ -260,12 +282,12 @@ export function PurchaseList() {
 
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by ID, title, vendor, requestor…" aria-label="Filter purchasing documents" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter berdasarkan ID, judul, vendor, requestor…" aria-label="Filter dokumen purchasing" />
           </div>
-          <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Type filter" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
-            {['All Types', 'PO', 'PR'].map((t) => <option key={t}>{t}</option>)}
+          <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Filter jenis" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
+            {['Semua Jenis', 'PO', 'PR'].map((t) => <option key={t}>{t}</option>)}
           </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status filter" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter status" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
             {statuses.map((s) => <option key={s}>{s}</option>)}
           </select>
         </div>
@@ -276,10 +298,10 @@ export function PurchaseList() {
             <thead>
               <tr className="text-left text-muted border-b border-border-subtle bg-surface">
                 <th className="p-2 font-semibold">Document</th>
-                <th className="font-semibold">Type</th>
-                <th className="font-semibold">Title</th>
+                <th className="font-semibold">Jenis</th>
+                <th className="font-semibold">Judul</th>
                 <th className="font-semibold">Vendor</th>
-                <th className="font-semibold">Amount</th>
+                <th className="font-semibold">Nilai</th>
                 <th className="font-semibold">Requestor</th>
                 <th className="font-semibold">Status</th>
                 <th className="font-semibold">Dossier</th>
@@ -309,13 +331,13 @@ export function PurchaseList() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="p-6 text-center text-muted">No documents match — clear filters.</td></tr>
+                <tr><td colSpan={8} className="p-6 text-center text-muted">Tidak ada dokumen yang cocok — ubah filter.</td></tr>
               )}
             </tbody>
           </table>
         </div>
         )}
-        <p className="text-xs text-muted" role="status">Showing {filtered.length} of {rows.length} {live ? 'live server' : 'demo'} documents.</p>
+        <p className="text-xs text-muted" role="status">Menampilkan {filtered.length} dari {rows.length} dokumen {live ? '' : '(demo)'}.</p>
       </section>
 
       <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 w-full max-w-sm" aria-live="polite">
@@ -323,7 +345,7 @@ export function PurchaseList() {
           <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
             {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
             <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
+            <button type="button" aria-label="Tutup notifikasi" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
           </div>
         ))}
       </div>

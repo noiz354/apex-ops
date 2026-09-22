@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CloudUpload, SignalLow, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { CANON } from '@/lib/canon';
 import { cn } from '@/lib/utils';
 import {
   clearSyncedOutbox,
@@ -37,8 +36,8 @@ export function SyncStatus() {
         if (res.synced > 0 || res.failed > 0) {
           push(
             res.failed === 0,
-            'Back online — auto-sync',
-            `${res.synced} item(s) replayed with their original idempotency keys${res.failed ? ` · ${res.failed} rejected (see queue)` : ''}.`,
+            'Kembali online — sinkron otomatis',
+            `${res.synced} item diputar ulang dengan idempotency key aslinya${res.failed ? ` · ${res.failed} ditolak (lihat antrean)` : ''}.`,
           );
         }
       });
@@ -66,30 +65,30 @@ export function SyncStatus() {
     const res = await flushOutbox({ onlyIds: [item.id] });
     setBusyId(null);
     if (res.synced > 0) {
-      push(true, 'Item synced', `${item.op} acknowledged — same idempotency key, no duplicate.`);
+      push(true, 'Item tersinkron', `${item.op} diakui — idempotency key sama, tidak duplikat.`);
     } else if (res.failed > 0) {
-      push(false, 'Item rejected', `${item.op} was rejected by the server (see message). Edit & re-capture if needed.`);
+      push(false, 'Item ditolak', `${item.op} ditolak server (lihat pesan). Ubah & kirim ulang bila perlu.`);
     } else {
-      push(false, 'Still offline', `${item.op} kept in queue. Retry when the link recovers.`);
+      push(false, 'Masih luring', `${item.op} tetap di antrean. Coba lagi saat koneksi pulih.`);
     }
   };
 
   const syncAll = async () => {
     if (busyId) return;
     setBusyId('ALL');
-    push(true, 'Sync started', 'Replaying queued items with their original idempotency keys…');
+    push(true, 'Sinkron dimulai', 'Memutar ulang antrean dengan idempotency key aslinya…');
     const res = await flushOutbox({});
     setBusyId(null);
     push(
       res.failed === 0,
-      'Sync finished',
-      `${res.synced} synced${res.failed ? ` · ${res.failed} rejected` : ''}${res.pending ? ` · ${res.pending} still pending (offline)` : ''}.`,
+      'Sinkron selesai',
+      `${res.synced} tersinkron${res.failed ? ` · ${res.failed} ditolak` : ''}${res.pending ? ` · ${res.pending} masih antre (luring)` : ''}.`,
     );
   };
 
   const clearSynced = async () => {
     await clearSyncedOutbox();
-    push(true, 'History cleared', 'Synced items removed from the on-device queue.');
+    push(true, 'Riwayat dibersihkan', 'Item tersinkron dihapus dari antrean perangkat.');
   };
 
   const chip = (st: State) =>
@@ -105,12 +104,12 @@ export function SyncStatus() {
     <>
       <header className="no-print fixed top-7 w-full z-50 pt-safe bg-surface/90 backdrop-blur-xl border-b-2 border-slate900">
         <div className="min-h-16 px-4 flex items-center justify-between gap-2 max-w-3xl mx-auto w-full py-2">
-          <Link href="/field/audits" className="min-w-[48px] min-h-[48px] flex items-center justify-center rounded border-2 border-slate900 bg-white" aria-label="Back to audits">
+          <Link href="/field/audits" className="min-w-[48px] min-h-[48px] flex items-center justify-center rounded border-2 border-slate900 bg-white" aria-label="Kembali ke audit">
             <ArrowLeft size={24} />
           </Link>
           <div className="flex-1 min-w-0 text-center">
-            <h1 className="text-lg font-semibold font-display">Sync Status</h1>
-            <p className="text-xs text-muted">{CANON.inspection} · {CANON.inspectionProgress}% · E. Voronova</p>
+            <h1 className="text-lg font-semibold font-display">Status Sinkron</h1>
+            <p className="text-xs text-muted">INS-2026-0412 · 65% · E. Voronova</p>
           </div>
           <span className="min-w-[48px] min-h-[48px] flex items-center justify-center rounded border-2 border-warn bg-warn-bg text-warn-ink" role="status" aria-label={online ? 'Online' : 'Offline'}>
             {online ? <CloudUpload size={24} /> : <SignalLow size={24} />}
@@ -122,18 +121,18 @@ export function SyncStatus() {
         {!online && pendingItems.length > 0 && (
           <div className="flex items-center gap-2 px-3 py-3 rounded border-2 border-warn bg-warn-bg text-warn-ink" role="alert">
             <WifiOff size={22} />
-            <p className="text-sm font-semibold">Offline — queue held on-device (IndexedDB). Nothing is lost; it replays automatically when the link returns.</p>
+            <p className="text-sm font-semibold">Luring — antrean tersimpan di perangkat. Tidak ada yang hilang; terkirim otomatis saat koneksi kembali.</p>
           </div>
         )}
 
         <section className="rounded border-2 border-slate900 bg-white shadow-hard p-3 flex items-center justify-between gap-2" aria-label="Queue summary">
           <div>
-            <h2 className="text-lg font-semibold font-display">Outbox Queue</h2>
+            <h2 className="text-lg font-semibold font-display">Antrean Outbox</h2>
             <p className="text-sm text-muted">
               {pendingItems.length === 0
-                ? 'Queue clear'
-                : `${pendingItems.length} item(s) pending${oldest ? ` · oldest ${new Date(oldest).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
-              {expiredItems.length > 0 ? ` · ${expiredItems.length} expired (>7d, not replayed)` : ''}
+                ? 'Antrean kosong'
+                : `${pendingItems.length} item antre${oldest ? ` · tertua ${new Date(oldest).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+              {expiredItems.length > 0 ? ` · ${expiredItems.length} kedaluwarsa (>7 hari, tidak dikirim)` : ''}
             </p>
           </div>
           <Button
@@ -142,21 +141,21 @@ export function SyncStatus() {
             onClick={syncAll}
             disabled={pendingItems.length === 0 || busyId !== null}
           >
-            {busyId === 'ALL' ? 'Syncing…' : 'Sync Now'}
+            {busyId === 'ALL' ? 'Menyinkron…' : 'Sinkron Sekarang'}
           </Button>
         </section>
 
         {pendingItems.length === 0 ? (
           <div className="rounded border-2 border-dashed border-pass bg-white p-6 text-center flex flex-col items-center gap-2">
             <CloudUpload size={36} className="text-pass" />
-            <p className="text-lg font-semibold font-display">Queue clear</p>
-            <p className="text-sm text-muted">All items synced · progress updated to {CANON.inspectionProgress}%.</p>
+            <p className="text-lg font-semibold font-display">Antrean kosong</p>
+            <p className="text-sm text-muted">Semua item tersinkron · progres 65%.</p>
             <Link href="/field/audits" className="min-h-[48px] inline-flex items-center px-4 rounded bg-slate900 text-white text-sm font-bold">
-              Back to Audits
+              Kembali ke Audit
             </Link>
           </div>
         ) : (
-          <ul className="flex flex-col gap-2" aria-label="Pending items">
+          <ul className="flex flex-col gap-2" aria-label="Item antre">
             {[...pendingItems, ...expiredItems].map((item) => (
               <li key={item.id} className="rounded border-2 border-border-strong bg-white p-3 flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
@@ -177,13 +176,13 @@ export function SyncStatus() {
                     onClick={() => retry(item)}
                     disabled={busyId !== null || item.status === 'SENDING' || item.status === 'EXPIRED'}
                   >
-                    {item.status === 'SENDING' ? 'Sending…' : 'Retry'}
+                    {item.status === 'SENDING' ? 'Mengirim…' : 'Coba lagi'}
                   </Button>
                   <Link
-                    href={`/field/audits/${CANON.inspection}/run`}
+                    href={'/field/audits/INS-2026-0412/run'}
                     className="flex-1 min-h-[48px] rounded bg-surface-subtle text-sm font-bold inline-flex items-center justify-center"
                   >
-                    Open Step
+                    Buka Langkah
                   </Link>
                 </div>
               </li>
@@ -193,20 +192,20 @@ export function SyncStatus() {
 
         <section className="rounded border-2 border-border-strong bg-white p-3 flex flex-col gap-1" aria-label="Synced">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold font-display">Recently Synced</h2>
+            <h2 className="text-lg font-semibold font-display">Baru Tersinkron</h2>
             {syncedItems.length > 0 && (
               <button type="button" className="text-xs font-bold text-muted hover:text-fail underline" onClick={clearSynced}>
-                Clear
+                Bersihkan
               </button>
             )}
           </div>
           {syncedItems.length === 0 ? (
-            <p className="text-sm text-muted">Nothing synced yet on this device.</p>
+            <p className="text-sm text-muted">Belum ada yang tersinkron di perangkat ini.</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {syncedItems.map((item) => (
                 <li key={item.id} className="flex items-center justify-between gap-2">
-                  <span className="truncate">{item.op} · idempotent replay ✓</span>
+                  <span className="truncate">{item.op} · replay idempoten ✓</span>
                   <span className="text-xs font-bold text-pass whitespace-nowrap">
                     SYNCED {item.lastAttemptAt ? new Date(item.lastAttemptAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}
                   </span>

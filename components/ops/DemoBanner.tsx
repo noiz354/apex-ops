@@ -8,8 +8,7 @@ export function DemoBanner() {
     >
       <TriangleAlert size={13} className="shrink-0" aria-hidden="true" />
       <p className="truncate">
-        DEMO — real auth + work-order flow (Postgres) · other screens still simulated ·{' '}
-        <span className="apex-id">docs/PHASE1_SLICE1.md</span>
+        DEMO — auth + alur work-order nyata (Postgres) · layar lain masih simulasi
       </p>
     </div>
   );

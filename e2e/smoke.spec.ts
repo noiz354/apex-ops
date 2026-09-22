@@ -8,13 +8,13 @@ async function login(page: Page): Promise<void> {
   await page.goto('/login');
   await page.fill('#lf-email', SEED_EMAIL);
   await page.fill('#lf-pass', SEED_PASSWORD);
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Lanjut' }).click();
   const hint = page.getByTestId('dev-hint');
   await expect(hint).toBeVisible();
   const code = (await hint.textContent())?.match(/\b(\d{6})\b/)?.[1];
   expect(code).toBeTruthy();
   await page.fill('#lf-mfa', code!);
-  await page.getByRole('button', { name: /Verify|Sign in|Continue/ }).click();
+  await page.getByRole('button', { name: /Verifikasi|Masuk|Lanjut/ }).click();
   await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 20_000 });
 }
 

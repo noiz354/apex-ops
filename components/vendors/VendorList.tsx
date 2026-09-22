@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Download, Plus, RefreshCw, X, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, LoaderCircle, Plus, RefreshCw, X, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { apiFetch } from '@/lib/api/client';
+import { ApiError, apiFetch } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 
 interface VendorRow {
@@ -20,22 +20,17 @@ interface VendorRow {
 interface Toast { id: number; ok: boolean; title: string; msg: string }
 let toastSeq = 1900;
 
-const download = (filename: string, text: string) => {
-  const blob = new Blob([text], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-};
-
 export function VendorList() {
   const [rows, setRows] = useState<VendorRow[]>([]);
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [tier, setTier] = useState('All Tiers');
-  const [status, setStatus] = useState('All Statuses');
+  const [tier, setTier] = useState('Semua Tier');
+  const [status, setStatus] = useState('Semua Status');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastTimers = useRef<number[]>([]);
+  const [busyExport, setBusyExport] = useState(false);
+  const [busyCreate, setBusyCreate] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [nwName, setNwName] = useState('');
   const [nwTier, setNwTier] = useState('TIER-3');
@@ -48,9 +43,15 @@ export function VendorList() {
 
   const push = (ok: boolean, title: string, msg: string) => {
     const id = toastSeq++;
-    setToasts((t) => [...t, { id, ok, title, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
+    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
+    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
+    toastTimers.current.push(timer);
   };
+
+  useEffect(() => () => {
+    toastTimers.current.forEach((t) => window.clearTimeout(t));
+    toastTimers.current = [];
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -60,7 +61,7 @@ export function VendorList() {
       setLive(true);
     } catch (e) {
       setLive(false);
-      push(false, 'Vendor directory unreachable', e instanceof Error ? `${e.message} — showing no rows rather than estimates.` : 'Server unreachable.');
+      push(false, 'Direktori vendor tidak terjangkau', e instanceof Error ? `${e.message} — tidak ada baris yang ditampilkan.` : 'Server tidak terjangkau.');
     } finally {
       setLoading(false);
     }
@@ -68,32 +69,51 @@ export function VendorList() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const filtered = rows.filter((r) => {
-    if (tier !== 'All Tiers' && !r.tier.startsWith(tier)) return false;
-    if (status === 'Active only' && r.msaStatus !== 'ACTIVE') return false;
-    if (status === 'Expired only' && r.msaStatus !== 'EXPIRED') return false;
+  const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return !needle || `${r.name} ${r.slug} ${r.scope ?? ''} ${r.contact ?? ''}`.toLowerCase().includes(needle);
-  });
+    return rows.filter((r) => {
+      if (tier !== 'Semua Tier' && !r.tier.startsWith(tier)) return false;
+      if (status === 'Aktif saja' && r.msaStatus !== 'ACTIVE') return false;
+      if (status === 'Kedaluarsa saja' && r.msaStatus !== 'EXPIRED') return false;
+      return !needle || `${r.name} ${r.slug} ${r.scope ?? ''} ${r.contact ?? ''}`.toLowerCase().includes(needle);
+    });
+  }, [rows, q, tier, status]);
 
-  const active = rows.filter((r) => r.msaStatus === 'ACTIVE').length;
-  const expired = rows.filter((r) => r.msaStatus === 'EXPIRED').length;
-  const avgSla = rows.length > 0
-    ? (rows.reduce((a, r) => a + (r.onTimePct ?? 0), 0) / rows.length).toFixed(1)
-    : '—';
+  const stats = useMemo(() => ({
+    active: rows.filter((r) => r.msaStatus === 'ACTIVE').length,
+    expired: rows.filter((r) => r.msaStatus === 'EXPIRED').length,
+    avgSla: rows.length > 0
+      ? (rows.reduce((a, r) => a + (r.onTimePct ?? 0), 0) / rows.length).toFixed(1)
+      : '—',
+  }), [rows]);
+  const { active, expired, avgSla } = stats;
 
-  const exportCsv = () => {
-    const head = 'company,slug,tier,scope,contact,msa,expiry,status,on_time_pct';
-    const body = filtered.map((r) => [`"${r.name}"`, `"${r.slug}"`, `"${r.tier}"`, `"${r.scope ?? ''}"`, `"${r.contact ?? ''}"`, `"${r.msaNumber ?? ''}"`, `"${r.msaExpiresOn ?? ''}"`, `"${r.msaStatus}"`, `"${r.onTimePct ?? ''}"`].join(','));
-    download('vendor-directory.csv', [head, ...body].join('\n'));
-    push(true, 'Directory exported', `${filtered.length} vendors → vendor-directory.csv (${live ? 'live server data' : 'demo data — server unreachable'}).`);
+  const exportCsv = async () => {
+    if (busyExport) return;
+    setBusyExport(true);
+    try {
+
+    const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+    const table: (string | number)[][] = [
+      ['company', 'slug', 'tier', 'scope', 'contact', 'msa', 'expiry', 'status', 'on_time_pct'],
+      ...filtered.map((r) => [r.name, r.slug, r.tier, r.scope ?? '', r.contact ?? '', r.msaNumber ?? '', r.msaExpiresOn ?? '', r.msaStatus, r.onTimePct ?? '']),
+    ];
+    const csv = await buildCsvViaWorker(table, ',');
+    await saveAsViaPickerOrDownload('vendor-directory.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+    push(true, 'Ekspor berhasil', `${filtered.length} vendor → vendor-directory.csv (${live ? 'data server' : 'data demo — server tidak terjangkau'}).`);
+    } catch {
+      push(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
+    } finally {
+      setBusyExport(false);
+    }
   };
 
   const dunsOk = nwDuns.trim() === '' || /^\d{2}-\d{3}-\d{4}$/.test(nwDuns.trim());
 
   const create = async () => {
     setNwTouched(true);
-    if (!nwName.trim() || !dunsOk) return;
+    if (!nwName.trim() || !dunsOk || busyCreate) return;
+    setBusyCreate(true);
     try {
       const v = await apiFetch<VendorRow>('/api/vendors', {
         method: 'POST',
@@ -105,9 +125,15 @@ export function VendorList() {
       setRows((r) => [v, ...r]);
       setNewOpen(false);
       setNwName(''); setNwDuns(''); setNwScope(''); setNwContact(''); setNwTouched(false);
-      push(true, 'Vendor onboarded', `${v.name} · directory record created (DUNS format-checked, not registry-verified).`);
+      push(true, 'Vendor ditambahkan', `${v.name} · data direktori dibuat (format DUNS diperiksa, bukan verifikasi registry).`);
     } catch (e) {
-      push(false, 'Onboard failed', e instanceof Error ? e.message : 'Server error.');
+      if (e instanceof ApiError) {
+        push(false, 'Gagal menambahkan', `${e.message} (${e.code})`);
+      } else {
+        push(false, 'Gangguan jaringan', 'Tidak ada yang dibuat. Periksa koneksi dan coba lagi.');
+      }
+    } finally {
+      setBusyCreate(false);
     }
   };
 
@@ -119,50 +145,50 @@ export function VendorList() {
         body: { op: 'renew', termMonths: Number(reTerm) },
       });
       setRows((rs) => rs.map((r) => (r.slug === v.slug ? v : r)));
-      push(true, 'Renewal recorded', `${v.msaNumber ?? v.slug} · new expiry ${v.msaExpiresOn} · audited.`);
+      push(true, 'Perpanjangan tercatat', `${v.msaNumber ?? v.slug} · kedaluarsa baru ${v.msaExpiresOn} · teraudit.`);
       setReV(null);
     } catch (e) {
-      push(false, 'Renewal failed', e instanceof Error ? e.message : 'Server error.');
+      push(false, 'Perpanjangan gagal', e instanceof Error ? e.message : 'Server bermasalah.');
     }
   };
 
   const statusTone = (s: string) => (s === 'EXPIRED' ? 'fail' : s === 'NO MSA' ? 'warn' : 'pass');
   const statusLabel = (r: VendorRow) => {
-    if (r.msaStatus === 'ACTIVE') return `ACTIVE (${r.daysLeft ?? '?'}d left)`;
-    if (r.msaStatus === 'EXPIRED') return 'EXPIRED — renewal overdue';
-    return 'NO MSA — onboarding';
+    if (r.msaStatus === 'ACTIVE') return `AKTIF (${r.daysLeft ?? '?'} hari tersisa)`;
+    if (r.msaStatus === 'EXPIRED') return 'KEDALUARSA — perlu perpanjangan';
+    return 'TANPA MSA — onboarding';
   };
 
   return (
     <>
       <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
-        <Link className="text-muted hover:text-cobalt font-medium" href="/">Home</Link>
+        <Link className="text-muted hover:text-cobalt font-medium" href="/">Beranda</Link>
         <span className="text-muted">/</span>
-        <span className="font-semibold">Vendors</span>
+        <span className="font-semibold">Vendor</span>
       </nav>
 
       <section className="bg-card border border-border-subtle rounded-lg p-6 flex flex-col gap-4 shadow-card" aria-labelledby="vnd-h">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="apex-id text-muted">
-              Approved Vendor Directory ·{' '}
-              <Badge variant={live ? 'pass' : 'warn'}>{live ? `Live · server-fed (${rows.length})` : 'Demo offline — server unreachable'}</Badge>
+              Direktori Vendor ·{' '}
+              <Badge variant={live ? 'pass' : 'warn'}>{live ? `Live · dari server (${rows.length})` : 'Demo offline — server tidak terjangkau'}</Badge>
             </p>
-            <h1 id="vnd-h" className="text-2xl font-semibold tracking-tight">Vendors</h1>
-            <p className="text-[13px] text-muted">MSA terms, SLA scorecards, and renewal posture across tiers.</p>
+            <h1 id="vnd-h" className="text-2xl font-semibold tracking-tight">Vendor</h1>
+            <p className="text-[13px] text-muted">Syarat MSA, skor SLA, dan status perpanjangan antar tier.</p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <Button variant="secondary" onClick={exportCsv}><Download size={16} /> Export (CSV)</Button>
-            <Button variant="secondary" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} /> Refresh</Button>
+            <Button variant="secondary" onClick={exportCsv} disabled={busyExport}>{busyExport ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />} Ekspor (CSV)</Button>
+            <Button variant="secondary" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} /> Muat Ulang</Button>
             <Dialog open={newOpen} onOpenChange={setNewOpen}>
               <DialogTrigger asChild>
-                <Button disabled={!live}><Plus size={16} /> New Vendor</Button>
+                <Button disabled={!live}><Plus size={16} /> Vendor Baru</Button>
               </DialogTrigger>
               <DialogContent aria-labelledby="nv-h">
-                <DialogTitle id="nv-h">Onboard Vendor</DialogTitle>
-                <DialogDescription>Creates a directory record (DUNS format-checked only — not registry-verified).</DialogDescription>
-                <label className="text-xs font-semibold" htmlFor="nv-n">Company (required)</label>
-                <Input id="nv-n" value={nwName} onChange={(e) => setNwName(e.target.value)} invalid={nwTouched && !nwName.trim()} placeholder="e.g. Carrier Rental Systems" />
+                <DialogTitle id="nv-h">Tambah Vendor</DialogTitle>
+                <DialogDescription>Membuat data direktori (format DUNS diperiksa saja — bukan verifikasi registry).</DialogDescription>
+                <label className="text-xs font-semibold" htmlFor="nv-n">Perusahaan (wajib)</label>
+                <Input id="nv-n" value={nwName} onChange={(e) => setNwName(e.target.value)} invalid={nwTouched && !nwName.trim()} placeholder="mis. Carrier Rental Systems" />
                 <div className="grid grid-cols-3 gap-2">
                   <div className="flex flex-col gap-0.5">
                     <label className="text-xs font-semibold" htmlFor="nv-t">Tier</label>
@@ -171,20 +197,20 @@ export function VendorList() {
                     </select>
                   </div>
                   <div className="flex flex-col gap-0.5 col-span-2">
-                    <label className="text-xs font-semibold" htmlFor="nv-d">DUNS (optional)</label>
+                    <label className="text-xs font-semibold" htmlFor="nv-d">DUNS (opsional)</label>
                     <Input id="nv-d" value={nwDuns} onChange={(e) => setNwDuns(e.target.value)} invalid={nwTouched && !dunsOk} placeholder="00-000-0000" className="apex-id" />
                   </div>
                 </div>
-                <label className="text-xs font-semibold" htmlFor="nv-s">Scope</label>
-                <Input id="nv-s" value={nwScope} onChange={(e) => setNwScope(e.target.value)} placeholder="e.g. Chiller overhaul" />
-                <label className="text-xs font-semibold" htmlFor="nv-c">Contact</label>
-                <Input id="nv-c" value={nwContact} onChange={(e) => setNwContact(e.target.value)} placeholder="e.g. Jane Doe · Account Manager" />
+                <label className="text-xs font-semibold" htmlFor="nv-s">Lingkup</label>
+                <Input id="nv-s" value={nwScope} onChange={(e) => setNwScope(e.target.value)} placeholder="mis. Overhaul chiller" />
+                <label className="text-xs font-semibold" htmlFor="nv-c">Kontak</label>
+                <Input id="nv-c" value={nwContact} onChange={(e) => setNwContact(e.target.value)} placeholder="mis. Jane Doe · Account Manager" />
                 {nwTouched && (!nwName.trim() || !dunsOk) && (
-                  <p className="text-[11px] font-semibold text-fail">Company is required; DUNS must look like ##-###-#### when given.</p>
+                  <p className="text-[11px] font-semibold text-fail">Perusahaan wajib diisi; DUNS harus seperti ##-###-#### bila diisi.</p>
                 )}
                 <div className="flex justify-end gap-2">
-                  <Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button>
-                  <Button onClick={() => void create()}>Onboard Vendor</Button>
+                  <Button variant="secondary" onClick={() => setNewOpen(false)}>Batal</Button>
+                  <Button onClick={() => void create()} disabled={busyCreate}>{busyCreate ? <LoaderCircle size={16} className="animate-spin" /> : null}Tambah Vendor</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -193,16 +219,16 @@ export function VendorList() {
 
         {!live && !loading && (
           <p className="rounded border border-warn bg-warn-bg text-warn-ink text-[13px] p-3" role="alert">
-            Server unreachable — no rows shown rather than estimates. Mutations are disabled offline.
+            Server tidak terjangkau — tidak ada baris yang ditampilkan. Perubahan dinonaktifkan saat offline.
           </p>
         )}
 
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {[
-            { l: 'Active Vendors', v: live ? String(active) : '—', s: 'In-term MSAs' },
-            { l: 'Expired Terms', v: live ? String(expired) : '—', s: 'Renewals overdue' },
-            { l: 'Average On-Time', v: live ? `${avgSla}%` : '—', s: `Trailing scorecard mean · ${rows.length} vendors (live server data)` },
-            { l: 'Directory Records', v: live ? String(rows.length) : '—', s: 'Live vendor table' },
+            { l: 'Vendor Aktif', v: live ? String(active) : '—', s: 'MSA berjalan' },
+            { l: 'MSA Kedaluarsa', v: live ? String(expired) : '—', s: 'Perlu perpanjangan' },
+            { l: 'Rata-rata Tepat Waktu', v: live ? `${avgSla}%` : '—', s: `Rata-rata skor · ${rows.length} vendor (data server)` },
+            { l: 'Data Direktori', v: live ? String(rows.length) : '—', s: 'Tabel vendor' },
           ].map((k) => (
             <div key={k.l} className="rounded-lg border border-border-subtle bg-surface p-3 flex flex-col gap-0.5">
               <span className="apex-label-caps text-muted">{k.l}</span>
@@ -214,13 +240,13 @@ export function VendorList() {
 
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by company, slug, scope, contact…" aria-label="Filter vendors" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter berdasarkan perusahaan, slug, lingkup, kontak…" aria-label="Filter vendor" />
           </div>
-          <select value={tier} onChange={(e) => setTier(e.target.value)} aria-label="Tier filter" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
-            {['All Tiers', 'Tier-1', 'Tier-2', 'Tier-3'].map((t) => <option key={t}>{t}</option>)}
+          <select value={tier} onChange={(e) => setTier(e.target.value)} aria-label="Filter tier" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
+            {['Semua Tier', 'Tier-1', 'Tier-2', 'Tier-3'].map((t) => <option key={t}>{t}</option>)}
           </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status filter" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
-            {['All Statuses', 'Active only', 'Expired only'].map((s) => <option key={s}>{s}</option>)}
+          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter status" className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
+            {['Semua Status', 'Aktif saja', 'Kedaluarsa saja'].map((s) => <option key={s}>{s}</option>)}
           </select>
         </div>
 
@@ -228,14 +254,14 @@ export function VendorList() {
           <table className="w-full text-[13px] min-w-[1060px]">
             <thead>
               <tr className="text-left text-muted border-b border-border-subtle bg-surface">
-                <th className="p-2 font-semibold">Company</th>
+                <th className="p-2 font-semibold">Perusahaan</th>
                 <th className="font-semibold">Slug</th>
-                <th className="font-semibold">Tier &amp; Scope</th>
-                <th className="font-semibold">Contact</th>
-                <th className="font-semibold">MSA · Expiry</th>
+                <th className="font-semibold">Tier &amp; Lingkup</th>
+                <th className="font-semibold">Kontak</th>
+                <th className="font-semibold">MSA · Kedaluarsa</th>
                 <th className="font-semibold">Status</th>
-                <th className="font-semibold">On-Time</th>
-                <th className="font-semibold">Action</th>
+                <th className="font-semibold">Tepat Waktu</th>
+                <th className="font-semibold">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -252,35 +278,35 @@ export function VendorList() {
                   <td className="apex-id text-xs font-semibold tabular-nums">{r.onTimePct !== null ? `${r.onTimePct}%` : '—'}</td>
                   <td>
                     {r.msaStatus === 'EXPIRED' ? (
-                      <button type="button" className="text-cobalt font-semibold hover:underline text-xs" onClick={() => setReV(r)}>Open Renewal</button>
+                      <button type="button" className="text-cobalt font-semibold hover:underline text-xs" onClick={() => setReV(r)}>Buka Perpanjangan</button>
                     ) : (
-                      <Link className="text-cobalt font-semibold hover:underline text-xs" href={`/vendors/${r.slug}`}>Profile →</Link>
+                      <Link className="text-cobalt font-semibold hover:underline text-xs" href={`/vendors/${r.slug}`}>Profil →</Link>
                     )}
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="p-6 text-center text-muted">{loading ? 'Loading directory…' : 'No vendors match — clear filters.'}</td></tr>
+                <tr><td colSpan={8} className="p-6 text-center text-muted">{loading ? 'Memuat direktori…' : 'Tidak ada vendor yang cocok — ubah filter.'}</td></tr>
               )}
             </tbody>
           </table>
         </div>
         <p className="text-xs text-muted" role="status">
-          Showing {filtered.length} of {rows.length} {live ? 'live' : 'demo'} vendors.
+          Menampilkan {filtered.length} dari {rows.length} vendor {live ? '' : '(demo)'}.
         </p>
       </section>
 
       <Dialog open={reV !== null} onOpenChange={(v) => { if (!v) setReV(null); }}>
         <DialogContent aria-labelledby="rn-h">
-          <DialogTitle id="rn-h">Renew {reV?.msaNumber ?? reV?.slug}</DialogTitle>
-          <DialogDescription>{reV?.name} · {reV?.msaExpiresOn ? `expired ${reV.msaExpiresOn}` : 'no term on file'} · records a fresh term server-side.</DialogDescription>
-          <label className="text-xs font-semibold" htmlFor="rn-term">Renewal term</label>
+          <DialogTitle id="rn-h">Perpanjang {reV?.msaNumber ?? reV?.slug}</DialogTitle>
+          <DialogDescription>{reV?.name} · {reV?.msaExpiresOn ? `kedaluarsa ${reV.msaExpiresOn}` : 'belum ada termin'} · mencatat termin baru di server.</DialogDescription>
+          <label className="text-xs font-semibold" htmlFor="rn-term">Jangka perpanjangan</label>
           <select id="rn-term" value={reTerm} onChange={(e) => setReTerm(e.target.value)} className="h-9 px-2 border border-border-strong rounded text-[13px] bg-card">
-            {['12', '24', '36'].map((t) => <option key={t} value={t}>{t} months</option>)}
+            {['12', '24', '36'].map((t) => <option key={t} value={t}>{t} bulan</option>)}
           </select>
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setReV(null)}>Cancel</Button>
-            <Button onClick={() => void renew()}><RefreshCw size={15} /> Record Renewal</Button>
+            <Button variant="secondary" onClick={() => setReV(null)}>Batal</Button>
+            <Button onClick={() => void renew()}><RefreshCw size={15} /> Catat Perpanjangan</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -290,7 +316,7 @@ export function VendorList() {
           <div key={t.id} role={t.ok ? 'status' : 'alert'} className={cn('rounded-lg shadow-modal p-4 flex gap-3 items-start', t.ok ? 'bg-pass-bg border border-pass text-pass-ink' : 'bg-fail-bg border border-fail text-fail-ink')}>
             {t.ok ? <CheckCircle2 size={20} className="shrink-0" /> : <XCircle size={20} className="shrink-0" />}
             <div className="flex-1"><p className="text-sm font-bold">{t.title}</p><p className="text-xs">{t.msg}</p></div>
-            <button type="button" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
+            <button type="button" aria-label="Tutup notifikasi" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
           </div>
         ))}
       </div>

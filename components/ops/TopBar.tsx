@@ -28,8 +28,8 @@ export function TopBar({ onPalette, user }: { onPalette: () => void; user: Sessi
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#EFF4FF]">
           <Building2 size={16} className="text-cobalt-deep" />
           <div className="flex flex-col text-left">
-            <span className="apex-label-caps text-muted">Tenant</span>
-            <span className="text-[13px] font-semibold truncate max-w-xs">{user.orgName} · {user.orgId}</span>
+            <span className="apex-label-caps text-muted">Organisasi</span>
+            <span className="text-[13px] font-semibold truncate max-w-xs">{user.orgName}</span>
           </div>
           <ChevronDown size={16} className="text-muted" />
         </div>
@@ -39,7 +39,7 @@ export function TopBar({ onPalette, user }: { onPalette: () => void; user: Sessi
           className="relative flex-1 min-w-0 text-left h-9 pl-9 pr-12 bg-card text-muted text-sm rounded-lg border border-border-subtle shadow-card"
         >
           <Search size={18} className="absolute left-2.5 top-1/2 -translate-y-1/2" />
-          <span className="truncate block">Search WO, AST, PART…</span>
+          <span className="truncate block">Cari WO, AST, PART…</span>
           <kbd className="absolute right-2 top-1/2 -translate-y-1/2 apex-id text-muted bg-surface-subtle px-1.5 py-0.5 rounded">
             ⌘K
           </kbd>
@@ -49,7 +49,7 @@ export function TopBar({ onPalette, user }: { onPalette: () => void; user: Sessi
         <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded bg-pass-bg" role="status">
           <span className="w-2 h-2 rounded-full bg-pass" />
           <span className="apex-id text-pass">
-            LIVE BACKEND · <span className="font-semibold">Postgres (PGlite)</span>
+            BACKEND AKTIF
           </span>
         </div>
         <button
@@ -58,18 +58,18 @@ export function TopBar({ onPalette, user }: { onPalette: () => void; user: Sessi
           className="h-9 px-4 rounded-lg bg-cobalt-deep text-white text-[13px] font-semibold hidden sm:flex items-center gap-2 hover:bg-cobalt"
         >
           <Plus size={16} strokeWidth={3} />
-          <span>New Dispatch / Request</span>
+          <span>Dispatch / Permintaan Baru</span>
         </button>
         <Link
           href="/notifications"
-          aria-label="Notifications"
+          aria-label="Notifikasi"
           className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#EFF4FF] relative"
         >
           <Bell size={20} />
           <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-fail ring-2 ring-surface" />
         </Link>
         <span className="flex items-center gap-2">
-          <Link href="/profile" className="flex items-center gap-2" aria-label="User profile">
+          <Link href="/profile" className="flex items-center gap-2" aria-label="Profil pengguna">
             <span className="w-8 h-8 rounded-full bg-cobalt-deep text-white text-[13px] font-bold flex items-center justify-center">
               {user.initials}
             </span>
@@ -82,8 +82,8 @@ export function TopBar({ onPalette, user }: { onPalette: () => void; user: Sessi
             type="button"
             onClick={logout}
             disabled={loggingOut}
-            aria-label="Sign out"
-            title="Sign out (revokes the DB session)"
+            aria-label="Keluar"
+            title="Keluar (mencabut sesi)"
             className="w-9 h-9 flex items-center justify-center rounded-lg bg-surface-subtle text-muted hover:text-fail hover:bg-fail-bg"
           >
             {loggingOut ? <LoaderCircle size={18} className="animate-spin" /> : <LogOut size={18} />}

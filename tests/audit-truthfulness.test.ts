@@ -189,11 +189,11 @@ test('GAP-15 audit queue cards disclose the Phase-2 run gate', () => {
     'utf8',
   );
   assert.ok(
-    body.includes('Phase 2') && body.includes('run checklist not available yet'),
-    'non-canonical audit cards must carry the Phase-2 badge (run route only serves CANON.inspection)',
+    body.includes('Fase 2') && body.includes('checklist run belum tersedia'),
+    'non-canonical audit cards must carry the Phase-2 badge (run route only serves INS-2026-0412)',
   );
   assert.ok(
-    body.includes('a.id !== CANON.inspection'),
+    body.includes("a.id !== 'INS-2026-0412'"),
     'Phase-2 badge must be gated on non-canonical ids, not shown on the runnable audit',
   );
 });
@@ -387,7 +387,7 @@ test('SDD T2-5 telemetry claims stay honest (no fake synced/streaming)', () => {
   assert.ok(!inspections.includes('SCADA STREAMING'), 'FieldInspectionsHub still fabricates SCADA STREAMING');
   assert.ok(!inspections.includes('Modbus TCP/IP: Active'), 'FieldInspectionsHub still claims live Modbus');
   assert.ok(
-    inspections.includes('demo — not connected') && inspections.includes('DEMO — NOT STREAMING'),
+    inspections.includes('demo — tidak tersambung') && inspections.includes('DEMO — TIDAK STREAMING'),
     'IoT link must keep explicit demo/not-connected labels',
   );
 
@@ -404,4 +404,111 @@ test('SDD T2-5 telemetry claims stay honest (no fake synced/streaming)', () => {
     !orgHub.includes('14 Sep 2026 14:05 WIB'),
     'OrgHub deploy still stamps a hardcoded fictional timestamp',
   );
+});
+
+test('GAP-23 P0/P1/P2: canon fixture import stays removed from remediated surfaces', () => {
+  const files = [
+    'components/workorders/WorkOrderList.tsx',
+    'components/requests/ServiceRequestList.tsx',
+    'components/requests/ServiceRequestDetail.tsx',
+    'components/assets/AssetRegistry.tsx',
+    'components/ops/WoDialogs.tsx',
+    'components/vendors/VendorList.tsx',
+    'components/purchasing/PurchaseList.tsx',
+    'components/purchasing/PurchaseDetail.tsx',
+    'components/purchasing/dialogs.tsx',
+    'components/field/RunChecklist.tsx',
+    'components/field/FieldInspectionsHub.tsx',
+    'components/field/FindingDesk.tsx',
+    'components/field/FindingCapture.tsx',
+    'components/field/SyncStatus.tsx',
+    'components/field/AuditQueue.tsx',
+    'components/ops/TopBar.tsx',
+    'components/auth/LoginForm.tsx',
+    'components/org/OrgHub.tsx',
+    'components/pm/PmHub.tsx',
+  ];
+  for (const rel of files) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    for (const gone of ['lib/canon', 'CANON.', 'downloadText', 'createObjectURL', 'client-side CSV of persisted rows']) {
+      assert.ok(!body.includes(gone), `${rel} regressed: still contains "${gone}"`);
+    }
+  }
+});
+
+test('GAP-23 P0/P1/P2: infra/tenant leaks stay absent from remediated surfaces', () => {
+  const files = [
+    'components/workorders/WorkOrderList.tsx',
+    'components/requests/ServiceRequestList.tsx',
+    'components/assets/AssetRegistry.tsx',
+    'components/ops/WoDialogs.tsx',
+    'components/vendors/VendorList.tsx',
+    'components/purchasing/PurchaseList.tsx',
+    'components/purchasing/PurchaseDetail.tsx',
+    'components/field/RunChecklist.tsx',
+    'components/field/FieldInspectionsHub.tsx',
+    'components/field/FindingDesk.tsx',
+    'components/field/FindingCapture.tsx',
+    'components/ops/TopBar.tsx',
+    'components/auth/LoginForm.tsx',
+    'components/org/OrgHub.tsx',
+    'components/pm/PmHub.tsx',
+  ];
+  for (const rel of files) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    for (const gone of ['tenant', 'LIVE BACKEND', 'Engine: v4.8 Active', 'Live Poll: 15s', 'ENGINE LIVE', '100% Synced']) {
+      assert.ok(!body.includes(gone), `${rel} regressed: still contains "${gone}"`);
+    }
+  }
+});
+
+test('GAP-23 P1/P2: CSV exports go through the worker builder, never naive quoting', () => {
+  const files = [
+    'components/workorders/WorkOrderList.tsx',
+    'components/requests/ServiceRequestList.tsx',
+    'components/assets/AssetRegistry.tsx',
+    'components/vendors/VendorList.tsx',
+    'components/purchasing/PurchaseList.tsx',
+    'components/purchasing/PurchaseDetail.tsx',
+    'components/org/OrgHub.tsx',
+    'components/field/FieldInspectionsHub.tsx',
+  ];
+  for (const rel of files) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    assert.ok(
+      body.includes('buildCsvViaWorker'),
+      `${rel} must export CSV via buildCsvViaWorker (quoting/injection-safe)`,
+    );
+  }
+});
+
+test('GAP-23 P0/P1/P2: Indonesian copy present on remediated surfaces', () => {
+  const cases: Array<[string, string[]]> = [
+    ['components/workorders/WorkOrderList.tsx', ['Work Order Baru', 'Ekspor (CSV)', 'Tugaskan ulang', 'Beranda', 'Semua Status']],
+    ['components/requests/ServiceRequestList.tsx', ['Permintaan Baru', 'Menunggu Triase', 'Ekspor (CSV)']],
+    ['components/requests/ServiceRequestDetail.tsx', ['Triase', 'Konversi', 'Tutup']],
+    ['components/assets/AssetRegistry.tsx', ['Registry Aset', 'Semua Kelas']],
+    ['components/ops/WoDialogs.tsx', ['Tahan', 'Eskalasi']],
+    ['components/vendors/VendorList.tsx', ['Semua Tier']],
+    ['components/purchasing/PurchaseList.tsx', ['Requisition Baru', 'Semua Jenis']],
+    ['components/purchasing/PurchaseDetail.tsx', ['Tinjau', 'Penerimaan', 'Tanda Tangan']],
+    ['components/purchasing/dialogs.tsx', ['Jumlah', 'Jenis sengketa', 'Minta Penawaran OEM']],
+    ['components/field/RunChecklist.tsx', ['Langkah 01', 'LOTO']],
+    ['components/field/FieldInspectionsHub.tsx', ['Beranda', 'Ekspor Log Audit', 'Serah Terima Shift']],
+    ['components/field/FindingDesk.tsx', ['Konversi Temuan ke WO', 'Tutup Temuan']],
+    ['components/field/FindingCapture.tsx', ['Catat Temuan Lapangan', 'Kirim Temuan']],
+    ['components/field/SyncStatus.tsx', ['Status Sinkron', 'Antrean Outbox']],
+    ['components/field/AuditQueue.tsx', ['SELESAI', 'ANTRE']],
+    ['components/ops/TopBar.tsx', ['BACKEND AKTIF', 'Organisasi']],
+    ['components/ops/DemoBanner.tsx', ['DEMO', 'simulasi']],
+    ['components/auth/LoginForm.tsx', ['Masuk', 'Lanjut']],
+    ['components/org/OrgHub.tsx', ['Tata Kelola Organisasi', 'Ekspor Log Audit', 'Tambah Pengguna']],
+    ['components/pm/PmHub.tsx', ['Penjadwalan Preventive Maintenance', 'Buat Rule', 'Semua']],
+  ];
+  for (const [rel, wants] of cases) {
+    const body = readFileSync(new URL(`../${rel}`, import.meta.url).pathname, 'utf8');
+    for (const want of wants) {
+      assert.ok(body.includes(want), `${rel} missing Indonesian copy: "${want}"`);
+    }
+  }
 });

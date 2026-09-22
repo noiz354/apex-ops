@@ -42,41 +42,41 @@ export function AuthDialog({ push, docId, amount, status, onDecided }: {
         { method: 'POST', body: { decision: 'APPROVE' } },
       );
       setPhase('done');
-      setMsg(`${row.number} APPROVED by ${row.decidedBy} · recorded in audit trail.`);
-      push(true, 'Approved & recorded', `${row.number} APPROVED — EDI auto-dispatch not connected, dispatch stays manual.`);
+      setMsg(`${row.number} disetujui oleh ${row.decidedBy} · tercatat di audit trail.`);
+      push(true, 'Disetujui & tercatat', `${row.number} disetujui — pengiriman tetap manual.`);
       onDecided?.();
     } catch (e) {
       setPhase('failed');
-      const m = e instanceof ApiError ? `${e.message} (${e.code})` : 'Unexpected error — nothing was approved.';
+      const m = e instanceof ApiError ? `${e.message} (${e.code})` : 'Kesalahan tak terduga — tidak ada yang disetujui.';
       setMsg(m);
-      push(false, 'Approval failed', m);
+      push(false, 'Persetujuan gagal', m);
     }
   };
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button disabled={!decidable} title={decidable ? 'Approve this document' : `Already ${status} — decision is terminal`}>
-          Authorize{decidable ? '' : ` (${status})`}
+        <Button disabled={!decidable} title={decidable ? 'Setujui dokumen ini' : `Sudah ${status} — keputusan bersifat final`}>
+          Otorisasi{decidable ? '' : ` (${status})`}
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle>Authorize</DialogTitle>
-        <DialogDescription>{docId} → approval recorded in audit trail (no EDI transmit)</DialogDescription>
+        <DialogTitle>Otorisasi</DialogTitle>
+        <DialogDescription>{docId} → persetujuan tercatat di audit trail</DialogDescription>
         <ul className="text-[13px] flex flex-col gap-1.5">
-          <li className="flex justify-between"><span className="text-muted">Amount</span><strong className="apex-id">{amount}</strong></li>
-          <li className="flex justify-between"><span className="text-muted">Current status</span><strong className="apex-id">{status}</strong></li>
-          <li className="flex justify-between"><span className="text-muted">Effect</span><strong>APPROVED + audit event</strong></li>
+          <li className="flex justify-between"><span className="text-muted">Jumlah</span><strong className="apex-id">{amount}</strong></li>
+          <li className="flex justify-between"><span className="text-muted">Status saat ini</span><strong className="apex-id">{status}</strong></li>
+          <li className="flex justify-between"><span className="text-muted">Efek</span><strong>DISETUJUI + event audit</strong></li>
         </ul>
         <p className="text-xs text-muted" role="status">
-          {phase === 'ready' && 'Ready — approval is recorded server-side. Dispatch stays manual.'}
-          {phase === 'sending' && 'Recording approval…'}
+          {phase === 'ready' && 'Siap — persetujuan dicatat di server. Pengiriman tetap manual.'}
+          {phase === 'sending' && 'Mencatat persetujuan…'}
           {(phase === 'done' || phase === 'failed') && msg}
         </p>
-        {phase === 'done' && <Badge variant="pass">{docId} APPROVED</Badge>}
+        {phase === 'done' && <Badge variant="pass">{docId} DISETUJUI</Badge>}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setPhase('ready')}>Reset</Button>
+          <Button variant="secondary" onClick={() => setPhase('ready')}>Ulangi</Button>
           <Button onClick={confirm} disabled={phase === 'sending' || !decidable}>
-            {phase === 'sending' ? 'Recording…' : 'Confirm & Approve'}
+            {phase === 'sending' ? 'Mencatat…' : 'Konfirmasi & Setujui'}
           </Button>
         </div>
       </DialogContent>
@@ -96,16 +96,16 @@ export function RfqDialog({ push, sku }: { push: ToastFn; sku: string }) {
     setSel((s) => (s.includes(id) ? s.filter((v) => v !== id) : [...s, id]));
   const send = () => {
     setSent(true);
-    push(true, 'RFQ logged locally', `Quotes for ${sku} noted for ${sel.length} channel(s) — no vendor integration, nothing was sent.`);
+    push(true, 'RFQ dicatat lokal', `Penawaran untuk ${sku} dicatat untuk ${sel.length} kanal — tidak ada integrasi vendor, tidak ada yang dikirim.`);
   };
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="secondary">Request OEM Quotes</Button>
+        <Button variant="secondary">Minta Penawaran OEM</Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle>Request OEM Quotes</DialogTitle>
-        <DialogDescription>{sku} · select at least one vendor · local log only (no vendor integration)</DialogDescription>
+        <DialogTitle>Minta Penawaran OEM</DialogTitle>
+        <DialogDescription>{sku} · pilih minimal satu vendor · hanya log lokal (tidak ada integrasi vendor)</DialogDescription>
         <div className="flex flex-col gap-2 text-sm">
           {RFQ_VENDORS.map((v) => (
             <label key={v.id} className="flex items-center gap-2 rounded border border-border-subtle p-3 cursor-pointer">
@@ -123,11 +123,11 @@ export function RfqDialog({ push, sku }: { push: ToastFn; sku: string }) {
           ))}
         </div>
         <p className="text-xs text-muted" role="status">
-          {sent ? 'RFQ noted locally — no vendor integration.' : sel.length === 0 ? 'Select at least one vendor.' : `${sel.length} vendor(s) selected.`}
+          {sent ? 'RFQ dicatat lokal — tidak ada integrasi vendor.' : sel.length === 0 ? 'Pilih minimal satu vendor.' : `${sel.length} vendor dipilih.`}
         </p>
         <div className="flex justify-end gap-2">
-          <Button variant="secondary">Cancel</Button>
-          <Button disabled={sel.length === 0} onClick={send}>Log RFQ</Button>
+          <Button variant="secondary">Batal</Button>
+          <Button disabled={sel.length === 0} onClick={send}>Catat RFQ</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -153,11 +153,11 @@ export function RejectDialog({ push, docId, onDecided }: {
       );
       setOpen(false);
       setReason('');
-      push(true, `${row.number} REJECTED`, `Reason recorded in audit trail by ${row.decidedBy}.`);
+      push(true, `${row.number} DITOLAK`, `Alasan tercatat di audit trail oleh ${row.decidedBy}.`);
       onDecided?.();
     } catch (e) {
-      const m = e instanceof ApiError ? `${e.message} (${e.code})` : 'Unexpected error — nothing was rejected.';
-      push(false, 'Rejection failed', m);
+      const m = e instanceof ApiError ? `${e.message} (${e.code})` : 'Kesalahan tak terduga — tidak ada yang ditolak.';
+      push(false, 'Penolakan gagal', m);
     } finally {
       setBusy(false);
     }
@@ -165,12 +165,12 @@ export function RejectDialog({ push, docId, onDecided }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive">Reject</Button>
+        <Button variant="destructive">Tolak</Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle>Reject {docId}</DialogTitle>
-        <DialogDescription>Destructive — requires a reason (written to the audit trail)</DialogDescription>
-        <label className="text-xs font-semibold" htmlFor="pr-reject-reason">Reason (required, min 3 chars)</label>
+        <DialogTitle>Tolak {docId}</DialogTitle>
+        <DialogDescription>Destruktif — wajib alasan (ditulis ke audit trail)</DialogDescription>
+        <label className="text-xs font-semibold" htmlFor="pr-reject-reason">Alasan (wajib, min 3 karakter)</label>
         <textarea
           id="pr-reject-reason"
           rows={2}
@@ -178,15 +178,15 @@ export function RejectDialog({ push, docId, onDecided }: {
           onChange={(e) => setReason(e.target.value)}
           className="w-full p-2 border border-border-strong rounded text-sm outline-none focus:border-cobalt focus:ring-1 focus:ring-cobalt"
         />
-        {!ok && <p className="text-[11px] font-semibold text-fail">A reason (min 3 chars) is required to reject.</p>}
+        {!ok && <p className="text-[11px] font-semibold text-fail">Alasan (min 3 karakter) wajib diisi untuk menolak.</p>}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="secondary" onClick={() => setOpen(false)}>Batal</Button>
           <Button
             variant="destructive"
             disabled={!ok || busy}
             onClick={reject}
           >
-            {busy ? 'Rejecting…' : 'Reject'}
+            {busy ? 'Menolak…' : 'Tolak'}
           </Button>
         </div>
       </DialogContent>
@@ -212,17 +212,17 @@ export function DisputeDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="secondary">Flag Discrepancy</Button>
+        <Button variant="secondary">Tandai Selisih</Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle>Flag Discrepancy</DialogTitle>
-        <DialogDescription>{docId} · local log only (no dispute endpoint)</DialogDescription>
-        <div className="flex flex-col gap-2 text-sm" role="radiogroup" aria-label="Dispute kind">
+        <DialogTitle>Tandai Selisih</DialogTitle>
+        <DialogDescription>{docId} · hanya log lokal (belum ada endpoint sengketa)</DialogDescription>
+        <div className="flex flex-col gap-2 text-sm" role="radiogroup" aria-label="Jenis sengketa">
           {(
             [
-              ['return', 'Return to vendor'],
-              ['claim', 'Warranty / damage claim'],
-              ['partial', 'Partial accept + backorder'],
+              ['return', 'Retur ke vendor'],
+              ['claim', 'Klaim garansi / kerusakan'],
+              ['partial', 'Terima sebagian + backorder'],
             ] as [DisputeKind, string][]
           ).map(([v, l]) => (
             <label key={v} className="flex items-center gap-2 cursor-pointer">
@@ -231,7 +231,7 @@ export function DisputeDialog({
             </label>
           ))}
         </div>
-        <label className="text-xs font-semibold" htmlFor="dsp-note">Note (required)</label>
+        <label className="text-xs font-semibold" htmlFor="dsp-note">Catatan (wajib)</label>
         <textarea
           id="dsp-note"
           rows={2}
@@ -239,18 +239,18 @@ export function DisputeDialog({
           onChange={(e) => setNote(e.target.value)}
           className="w-full p-2 border border-border-strong rounded text-sm outline-none focus:border-cobalt focus:ring-1 focus:ring-cobalt"
         />
-        {!ok && <p className="text-[11px] font-semibold text-fail">Describe the discrepancy.</p>}
+        {!ok && <p className="text-[11px] font-semibold text-fail">Jelaskan selisihnya.</p>}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="secondary" onClick={() => setOpen(false)}>Batal</Button>
           <Button
             disabled={!ok}
             onClick={() => {
               setOpen(false);
               onDisputed(kind);
-              push(false, 'Discrepancy logged locally', `Vendor claim noted (${kind}) — no dispute endpoint, GRN unchanged.`, true);
+              push(false, 'Selisih dicatat lokal', `Klaim vendor dicatat (${kind}) — belum ada endpoint sengketa, GRN tidak berubah.`, true);
             }}
           >
-            Log Dispute
+            Catat Sengketa
           </Button>
         </div>
       </DialogContent>

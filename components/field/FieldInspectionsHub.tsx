@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertOctagon,
@@ -40,7 +40,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { CANON } from '@/lib/canon';
 import { ApiError, apiFetch } from '@/lib/api/client';
 
 
@@ -85,11 +84,11 @@ function toHubRow(r: ServerInspection): AuditItem {
     id: r.number,
     name: r.title,
     assetId: '—',
-    zone: 'Server record',
-    dueText: status === 'COMPLETED' ? 'Completed' : status === 'OVERDUE' ? 'Overdue' : status === 'IN_PROGRESS' ? 'Today' : 'Scheduled',
-    dueSub: `progress ${r.progressPct}%`,
+    zone: 'Data server',
+    dueText: status === 'COMPLETED' ? 'Selesai' : status === 'OVERDUE' ? 'Terlambat' : status === 'IN_PROGRESS' ? 'Hari ini' : 'Terjadwal',
+    dueSub: `progres ${r.progressPct}%`,
     assignee: r.auditorName,
-    assigneeRole: 'Field Tech',
+    assigneeRole: 'Teknisi Lapangan',
     assigneeInitials: initialsOf(r.auditorName),
     status,
     progress: r.progressPct,
@@ -98,64 +97,64 @@ function toHubRow(r: ServerInspection): AuditItem {
 
 const INITIAL_AUDITS: AuditItem[] = [
   {
-    id: CANON.inspection,
-    name: 'Chiller Plant Pre-Shift Safety & Pressure Audit',
-    assetId: CANON.assetSeal,
+    id: 'INS-2026-0412',
+    name: 'Audit Keselamatan & Tekanan Chiller Plant Pra-Shift',
+    assetId: 'AST-HVAC-004',
     zone: 'Basement Mech Room B-204',
-    dueText: 'Today 16:00',
-    dueSub: 'Due in 45m',
+    dueText: 'Hari ini 16:00',
+    dueSub: '45 mnt lagi',
     assignee: 'M. Kowalski',
-    assigneeRole: 'Lead Tech',
+    assigneeRole: 'Lead Teknisi',
     assigneeInitials: 'MK',
     status: 'IN_PROGRESS',
-    progress: CANON.inspectionProgress,
+    progress: 65,
   },
   {
     id: 'INS-2026-0409',
-    name: 'Emergency Generator Fuel & Battery System Run Test',
+    name: 'Uji Jalan Sistem BBM & Baterai Genset Darurat',
     assetId: 'AST-GEN-01',
     zone: 'Sub-Basement Vault',
-    dueText: 'Overdue',
-    dueSub: 'Lapsed 3h ago',
+    dueText: 'Terlambat',
+    dueSub: 'Terlambat 3 jam lalu',
     assignee: 'T. Chen',
-    assigneeRole: 'Apprentice',
+    assigneeRole: 'Magang',
     assigneeInitials: 'TC',
     status: 'OVERDUE',
   },
   {
     id: 'INS-2026-0415',
-    name: 'Cleanroom ISO Class 5 HEPA Filter & Diff Pressure',
+    name: 'Filter HEPA & Tekanan Diferensial Cleanroom ISO Kelas 5',
     assetId: 'AST-ENV-108',
     zone: 'Clean Lab Annex 4',
-    dueText: 'Tomorrow 08:30',
-    dueSub: 'Shift 1 Standard',
+    dueText: 'Besok 08:30',
+    dueSub: 'Shift 1 Standar',
     assignee: 'E. Rostova',
-    assigneeRole: 'Bio-Facility',
+    assigneeRole: 'Fasilitas Bio',
     assigneeInitials: 'ER',
     status: 'SCHEDULED',
   },
   {
     id: 'INS-2026-0398',
-    name: 'Substation HV Switchgear Infrared Thermography',
+    name: 'Termografi Inframerah Switchgear HV Gardu',
     assetId: 'AST-ELEC-01',
     zone: 'Grid Substation Yard',
-    dueText: 'Completed',
-    dueSub: 'Today 10:15 UTC',
+    dueText: 'Selesai',
+    dueSub: 'Hari ini 10:15 UTC',
     assignee: 'M. Kowalski',
-    assigneeRole: 'PE Inspector',
+    assigneeRole: 'Inspektur PE',
     assigneeInitials: 'MK',
     status: 'FINDINGS',
     findingsCount: 2,
   },
   {
     id: 'INS-2026-0420',
-    name: 'Fire Suppression FM-200 Bottle Weight & Actuator Audit',
+    name: 'Audit Berat Tabung & Aktuator FM-200 Pemadam Kebakaran',
     assetId: 'ZONE-DC-04',
     zone: 'Raised Floor Data Center',
-    dueText: 'Scheduled',
-    dueSub: 'Feb 18, 09:00',
+    dueText: 'Terjadwal',
+    dueSub: '18 Feb, 09:00',
     assignee: 'R. Davies',
-    assigneeRole: 'Gov PE',
+    assigneeRole: 'PE Pemerintah',
     assigneeInitials: 'RD',
     status: 'READY',
   },
@@ -178,17 +177,17 @@ interface ChecklistStep {
 const INITIAL_STEPS: ChecklistStep[] = [
   {
     seq: 1,
-    title: 'Emergency Stop & LOTO Lock Guard Integrity',
+    title: 'Integritas Guard Emergency Stop & Kunci LOTO',
     type: 'Binary P/F',
-    description: 'Verify mechanical trip switch, padlocks, and hazardous energy lock-out tag-out labels are intact.',
-    logic: 'If FAIL: Auto-Flag Critical & Force Hazard Photo',
+    description: 'Verifikasi saklar trip mekanis, gembok, dan label lock-out tag-out energi berbahaya masih utuh.',
+    logic: 'Jika GAGAL: tandai kritis otomatis & foto hazard wajib',
   },
   {
     seq: 2,
-    title: 'Compressor Suction Pressure Reading',
+    title: 'Pembacaan Tekanan Hisap Kompresor',
     type: 'Numeric Bound',
-    description: 'Manifold gauge suction pressure reading while running at 100% stage modulation.',
-    logic: 'Out-of-bounds trigger automatic WO Creation',
+    description: 'Pembacaan tekanan hisap manifold gauge saat berjalan pada modulasi 100%.',
+    logic: 'Di luar batas memicu pembuatan WO otomatis',
     min: 110,
     max: 130,
     unit: 'PSI',
@@ -196,19 +195,19 @@ const INITIAL_STEPS: ChecklistStep[] = [
   },
   {
     seq: 3,
-    title: 'Sight Glass Bubble Check & Moisture Indicator',
+    title: 'Cek Gelembung Sight Glass & Indikator Kelembapan',
     type: 'Mandatory Media',
-    description: 'Inspect liquid line sight glass. Verify pure liquid state (no bubbles) and dry indicator color.',
-    logic: 'Technician GPS Geotag & Time Stamp Watermarked',
+    description: 'Periksa sight glass jalur cairan. Pastikan hanya cairan (tanpa gelembung) dan indikator kering.',
+    logic: 'Geotag GPS & stempel waktu teknisi',
     shotReq: 1,
   },
   {
     seq: 4,
-    title: 'Operating Run Hours & Delta-T Reading',
+    title: 'Jam Operasi & Pembacaan Delta-T',
     type: 'IoT Auto-Populate',
-    description: 'Asset AST-HVAC-004 Telemetry Live Poll',
-    logic: 'Auto-Attached via Gateway Link',
-    iotChannel: 'Modbus Channel 40112 (Chilled Water Delta-T)',
+    description: 'Telemetri aset AST-HVAC-004 (demo)',
+    logic: 'Terlampir otomatis via tautan gateway',
+    iotChannel: 'Kanal Modbus 40112 (Delta-T Air Dingin)',
     val: 'ΔT = 9.8°F',
   },
 ];
@@ -232,6 +231,8 @@ export function FieldInspectionsHub() {
   const [dispatching, setDispatching] = useState<string | null>(null);
   const [steps, setSteps] = useState<ChecklistStep[]>(INITIAL_STEPS);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastTimers = useRef<number[]>([]);
+  const [busyExport, setBusyExport] = useState(false);
 
   const [createTemplateOpen, setCreateTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState('');
@@ -253,27 +254,32 @@ export function FieldInspectionsHub() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-    void apiFetch<{ rows: ServerInspection[]; total: number }>('/api/inspections')
-      .then((res) => {
-        if (!alive) return;
-        if (res.rows.length > 0) setAudits(res.rows.map(toHubRow));
-        setLive(true);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setLive(false);
-        pushToast(false, 'Offline', 'Inspection queue served from demo fallback.');
-      });
-    return () => { alive = false; };
-  }, []);
-
   const pushToast = (ok: boolean, title: string, msg: string) => {
     const id = toastIdSeq++;
-    setToasts((t) => [...t, { id, ok, title, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
+    setToasts((t) => [...t.slice(-2), { id, ok, title, msg }]);
+    const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
+    toastTimers.current.push(timer);
   };
+
+  useEffect(() => () => {
+    toastTimers.current.forEach((t) => window.clearTimeout(t));
+    toastTimers.current = [];
+  }, []);
+
+  const loadAudits = useCallback(async (silent: boolean) => {
+    try {
+      const res = await apiFetch<{ rows: ServerInspection[]; total: number }>('/api/inspections');
+      if (res.rows.length > 0) setAudits(res.rows.map(toHubRow));
+      setLive(true);
+      if (!silent) pushToast(true, 'Antrean Dimuat Ulang', `${res.rows.length} inspeksi dari server.`);
+    } catch {
+      setLive(false);
+      pushToast(false, 'Offline', 'Antrean inspeksi dari cadangan demo.');
+    }
+  }, []);
+
+  useEffect(() => { void loadAudits(true); }, [loadAudits]);
+
 
   const handleForceDispatch = async (auditId: string) => {
     if (dispatching) return;
@@ -286,24 +292,24 @@ export function FieldInspectionsHub() {
       setAudits((prev) =>
         prev.map((a) =>
           a.id === auditId
-            ? { ...a, status: 'IN_PROGRESS', progress: data.progressPct, dueText: 'Today 17:00', dueSub: 'dispatched by server' }
+            ? { ...a, status: 'IN_PROGRESS', progress: data.progressPct, dueText: 'Hari ini 17:00', dueSub: 'didispatch server' }
             : a
         )
       );
-      pushToast(true, 'Force Dispatch Executed', `Audit ${data.number} escalated to IN_PROGRESS (server-confirmed).`);
+      pushToast(true, 'Dispatch Paksa Dijalankan', `Audit ${data.number} naik ke IN_PROGRESS (terkonfirmasi server).`);
     } catch (err) {
-      pushToast(false, 'Force Dispatch Failed', err instanceof ApiError ? `${err.message} (${err.code})` : 'Unknown dispatch failure.');
+      pushToast(false, 'Dispatch Paksa Gagal', err instanceof ApiError ? `${err.message} (${err.code})` : 'Kegagalan dispatch tak dikenal.');
     } finally {
       setDispatching(null);
     }
   };
 
   const handleSaveDraft = () => {
-    pushToast(true, 'Template Draft Saved', 'Protocol TMPL-HVAC-CHL-02 v2.4 saved to local draft storage.');
+    pushToast(true, 'Draf Tersimpan', 'Protokol TMPL-HVAC-CHL-02 v2.4 tersimpan sebagai draf lokal.');
   };
 
   const handlePublishTemplate = () => {
-    pushToast(true, 'Protocol Published', 'Template TMPL-HVAC-CHL-02 v2.4 is now LIVE for all mobile technicians.');
+    pushToast(true, 'Protokol Diterbitkan (lokal)', 'Template TMPL-HVAC-CHL-02 v2.4 ditandai terbit — hanya lokal, belum terkirim ke teknisi.');
   };
 
   const handleAddStep = () => {
@@ -313,24 +319,44 @@ export function FieldInspectionsHub() {
       seq: nextSeq,
       title: newStepTitle,
       type: newStepType,
-      description: 'Mandatory verification step configured by lead engineer.',
-      logic: newStepType === 'Binary P/F' ? 'If FAIL: Auto-Flag Critical' : 'Strict threshold validation enforced',
+      description: 'Langkah verifikasi wajib yang dikonfigurasi lead engineer.',
+      logic: newStepType === 'Binary P/F' ? 'Jika GAGAL: tandai kritis otomatis' : 'Validasi ambang ketat diberlakukan',
     };
     setSteps([...steps, newStep]);
     setNewStepTitle('');
     setAddStepOpen(false);
-    pushToast(true, 'Step Added', `Step 0${nextSeq} added to protocol draft.`);
+    pushToast(true, 'Langkah Ditambahkan', `Langkah 0${nextSeq} ditambahkan ke draf protokol.`);
   };
 
-  const filteredAudits = audits.filter((a) => {
-    if (tab === 'today' && !a.dueText.toLowerCase().includes('today') && !a.dueSub.toLowerCase().includes('45m')) return false;
+  const filteredAudits = useMemo(() => audits.filter((a) => {
+    if (tab === 'today' && !a.dueText.toLowerCase().includes('hari ini') && !a.dueSub.toLowerCase().includes('mnt')) return false;
     if (tab === 'overdue' && a.status !== 'OVERDUE') return false;
     if (tab === 'completed' && a.status !== 'FINDINGS' && a.status !== 'COMPLETED') return false;
-    if (zone !== 'All Facilities' && !a.zone.includes(zone)) return false;
+    if (zone !== 'Semua Fasilitas' && !a.zone.includes(zone)) return false;
     const q = search.trim().toLowerCase();
     if (q && !`${a.id} ${a.name} ${a.assetId} ${a.assignee} ${a.zone}`.toLowerCase().includes(q)) return false;
     return true;
-  });
+  }), [audits, tab, zone, search]);
+
+  const exportAuditLog = async () => {
+    if (busyExport) return;
+    setBusyExport(true);
+    try {
+      const { buildCsvViaWorker, saveAsViaPickerOrDownload } = await import('@/lib/download');
+      const table: (string | number)[][] = [
+        ['audit_id', 'name', 'asset', 'zone', 'due', 'assignee', 'status', 'progress'],
+        ...filteredAudits.map((a) => [a.id, a.name, a.assetId, a.zone, `${a.dueText} ${a.dueSub}`, a.assignee, a.status, a.progress ?? '']),
+      ];
+      const csv = await buildCsvViaWorker(table, ',');
+      await saveAsViaPickerOrDownload('audit-log.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'text/csv');
+      pushToast(true, 'Log Audit Diekspor', `Manifes CSV dari ${filteredAudits.length} audit terjadwal diunduh.`);
+    } catch {
+      pushToast(false, 'Ekspor gagal', 'Tidak ada file yang diunduh. Periksa koneksi dan coba lagi.');
+    } finally {
+      setBusyExport(false);
+    }
+  };
+
 
   return (
     <div className="flex flex-col gap-6 pb-16">
@@ -338,37 +364,34 @@ export function FieldInspectionsHub() {
       <section className="flex flex-col gap-2">
         <nav className="flex items-center gap-2 text-xs text-muted" aria-label="Breadcrumb">
           <Link className="hover:text-cobalt transition-colors" href="/">
-            Home
+            Beranda
           </Link>
           <span>/</span>
-          <span className="hover:text-cobalt transition-colors">Core Operations</span>
+          <span className="hover:text-cobalt transition-colors">Operasi Inti</span>
           <span>/</span>
-          <span className="hover:text-cobalt transition-colors">Field Inspections</span>
+          <span className="hover:text-cobalt transition-colors">Inspeksi Lapangan</span>
           <span>/</span>
-          <span className="font-semibold text-body">Audit Queue &amp; Template Builder</span>
+          <span className="font-semibold text-body">Antrean Audit &amp; Pembuat Template</span>
         </nav>
 
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 pt-1">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink font-display">
-                Inspection &amp; Audit Engine
+                Inspeksi &amp; Audit
               </h1>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface border border-border-subtle text-muted text-[11px] font-mono font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-pass animate-ping" />
-                  Live Poll: 15s
+                  {live ? 'Server: tersambung' : 'Server: offline'}
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pass-bg border border-pass/30 text-pass-ink text-[11px] font-mono font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-pass" />
-                  Audit Compliance: 98.2%
+                  Kepatuhan Audit: 98,2%
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-fail-bg border border-fail/30 text-fail-ink text-[11px] font-mono font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-fail" />
-                  Pending Field Audits: 7 Queued
-                </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded bg-cobalt-tint text-cobalt-deep text-[11px] font-mono font-semibold">
-                  Engine: v4.8 Active
+                  Audit Lapangan Tertunda: 7 Antre
                 </span>
               </div>
             </div>
@@ -378,15 +401,16 @@ export function FieldInspectionsHub() {
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="secondary"
-              onClick={() => pushToast(true, 'Audit Log Exported', 'CSV manifest of 18 scheduled audits downloaded.')}
+              onClick={() => void exportAuditLog()}
+              disabled={busyExport}
               className="h-9 gap-1.5 text-xs"
             >
-              <Download size={14} /> Export Audit Log
+              <Download size={14} /> Ekspor Log Audit
             </Button>
 
             <Link href="/shifts/plan">
               <Button variant="secondary" className="h-9 gap-1.5 text-xs">
-                <RefreshCw size={14} /> Shift Handover
+                <RefreshCw size={14} /> Serah Terima Shift
               </Button>
             </Link>
 
@@ -394,45 +418,45 @@ export function FieldInspectionsHub() {
             <Dialog open={createTemplateOpen} onOpenChange={setCreateTemplateOpen}>
               <DialogTrigger asChild>
                 <Button className="h-9 gap-1.5 text-xs bg-cobalt-deep hover:bg-cobalt text-white">
-                  <PlusCircle size={14} /> + Create Inspection Template
+                  <PlusCircle size={14} /> + Buat Template Inspeksi
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogTitle>Create Inspection Protocol Template</DialogTitle>
+                <DialogTitle>Buat Template Protokol Inspeksi</DialogTitle>
                 <DialogDescription>
-                  Define a new standardized checklist protocol for technician tablet execution.
+                  Definisikan protokol checklist standar baru untuk eksekusi di tablet teknisi.
                 </DialogDescription>
                 <div className="space-y-3 my-2 text-xs">
                   <div>
-                    <label className="font-semibold block mb-1">Protocol Title</label>
+                    <label className="font-semibold block mb-1">Judul Protokol</label>
                     <Input
                       value={newTemplateName}
                       onChange={(e) => setNewTemplateName(e.target.value)}
-                      placeholder="e.g. Chiller Condenser Tube Annual Inspection"
+                      placeholder="mis. Inspeksi Tahunan Tube Kondensor Chiller"
                     />
                   </div>
                   <div>
-                    <label className="font-semibold block mb-1">Asset Category</label>
+                    <label className="font-semibold block mb-1">Kategori Aset</label>
                     <select className="w-full h-9 px-2 border border-border-strong rounded text-xs bg-card">
-                      <option>Industrial Water Chillers &amp; Central Plant</option>
-                      <option>Emergency Diesel Generators &amp; ATS</option>
-                      <option>High Voltage Substation &amp; Transformers</option>
-                      <option>Fire &amp; Life Safety Sprinkler Systems</option>
-                      <option>Cleanroom HVAC &amp; Bio-Env</option>
+                      <option>Chiller Air Industri &amp; Central Plant</option>
+                      <option>Genset Diesel Darurat &amp; ATS</option>
+                      <option>Gardu Tegangan Tinggi &amp; Trafo</option>
+                      <option>Sistem Sprinkler Kebakaran &amp; Keselamatan</option>
+                      <option>HVAC Cleanroom &amp; Bio-Env</option>
                     </select>
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="secondary" onClick={() => setCreateTemplateOpen(false)}>
-                    Cancel
+                    Batal
                   </Button>
                   <Button
                     onClick={() => {
                       setCreateTemplateOpen(false);
-                      pushToast(true, 'Template Initialized', `Draft protocol [${newTemplateName || 'New Protocol'}] created.`);
+                      pushToast(true, 'Template Diinisiasi', `Draf protokol [${newTemplateName || 'Protokol Baru'}] dibuat (lokal).`);
                     }}
                   >
-                    Create Draft
+                    Buat Draf
                   </Button>
                 </div>
               </DialogContent>
@@ -446,36 +470,36 @@ export function FieldInspectionsHub() {
         {/* KPI 1 */}
         <div className="bg-card rounded-xl p-4 border border-border-subtle shadow-card flex flex-col justify-between">
           <div className="flex items-center justify-between text-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Active Inspection Protocols</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Protokol Inspeksi Aktif</span>
             <ClipboardCheck size={18} className="text-cobalt" />
           </div>
           <div className="my-2 flex items-baseline gap-1.5">
             <span className="text-2xl font-bold font-display text-ink tabular-nums">24</span>
-            <span className="text-xs text-muted font-medium">Protocols</span>
+            <span className="text-xs text-muted font-medium">Protokol</span>
           </div>
           <div className="flex items-center justify-between text-[11px] pt-1 text-muted border-t border-border-subtle">
             <span className="flex items-center gap-1 text-body">
               <span className="w-1.5 h-1.5 rounded-full bg-cobalt" />
-              100% Mapped
+              100% Terpetakan
             </span>
-            <span className="text-pass-ink font-semibold">+2 New (M-T-D)</span>
+            <span className="text-pass-ink font-semibold">+2 Baru (Bln-Berjalan)</span>
           </div>
         </div>
 
         {/* KPI 2 */}
         <div className="bg-card rounded-xl p-4 border border-border-subtle shadow-card flex flex-col justify-between">
           <div className="flex items-center justify-between text-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Inspection Compliance SLA</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">SLA Kepatuhan Inspeksi</span>
             <CheckCircle2 size={18} className="text-pass" />
           </div>
           <div className="my-2 flex items-baseline gap-1.5">
             <span className="text-2xl font-bold font-display text-pass-ink tabular-nums">98.2%</span>
-            <span className="text-xs font-semibold text-pass-ink">PASS</span>
+            <span className="text-xs font-semibold text-pass-ink">LULUS</span>
           </div>
           <div className="flex items-center justify-between text-[11px] pt-1 text-muted border-t border-border-subtle">
             <span>Target: <strong className="text-body font-mono">95.0%</strong></span>
             <span className="text-pass-ink font-semibold flex items-center gap-0.5">
-              <TrendingUp size={12} /> On Track (+3.2%)
+              <TrendingUp size={12} /> Sesuai Jalur (+3,2%)
             </span>
           </div>
         </div>
@@ -483,33 +507,33 @@ export function FieldInspectionsHub() {
         {/* KPI 3 */}
         <div className="bg-card rounded-xl p-4 border border-border-subtle shadow-card flex flex-col justify-between">
           <div className="flex items-center justify-between text-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Defects / Failed Checks (7d)</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Defek / Cek Gagal (7hr)</span>
             <AlertOctagon size={18} className="text-fail" />
           </div>
           <div className="my-2 flex items-baseline gap-1.5">
             <span className="text-2xl font-bold font-display text-fail tabular-nums">08</span>
-            <span className="text-xs font-medium text-fail-ink">Critical Findings</span>
+            <span className="text-xs font-medium text-fail-ink">Temuan Kritis</span>
           </div>
           <div className="flex items-center justify-between text-[11px] pt-1 text-muted border-t border-border-subtle">
-            <span>6 Auto-Converted</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-fail-bg text-fail-ink font-semibold">2 Pending Triage</span>
+            <span>6 Terkonversi Otomatis</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-fail-bg text-fail-ink font-semibold">2 Menunggu Triase</span>
           </div>
         </div>
 
         {/* KPI 4 */}
         <div className="bg-card rounded-xl p-4 border border-border-subtle shadow-card flex flex-col justify-between">
           <div className="flex items-center justify-between text-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Mobile Submissions Today</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Submisi Mobile Hari Ini</span>
             <Smartphone size={18} className="text-cobalt-deep" />
           </div>
           <div className="my-2 flex items-baseline gap-1.5">
             <span className="text-2xl font-bold font-display text-ink tabular-nums">14</span>
-            <span className="text-xs text-muted font-medium">Completed Runs</span>
+            <span className="text-xs text-muted font-medium">Run Selesai</span>
           </div>
           <div className="flex items-center justify-between text-[11px] pt-1 text-muted border-t border-border-subtle">
             <span>Shift A: <strong className="text-body font-mono">9</strong> | B: <strong className="text-body font-mono">5</strong></span>
             <span className="text-pass-ink font-semibold flex items-center gap-1">
-              <CloudCog size={12} /> Sync: demo KPI (not connected)
+              <CloudCog size={12} /> Sinkron: KPI demo (tidak tersambung)
             </span>
           </div>
         </div>
@@ -525,7 +549,7 @@ export function FieldInspectionsHub() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <ClipboardCheck className="text-cobalt-deep" size={18} />
-                  <h2 className="text-sm font-bold text-ink">Scheduled Inspections &amp; Audit Queue</h2>
+                  <h2 className="text-sm font-bold text-ink">Inspeksi Terjadwal &amp; Antrean Audit</h2>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-mono px-2 py-0.5 rounded bg-surface border border-border-subtle font-semibold">
@@ -533,9 +557,9 @@ export function FieldInspectionsHub() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => pushToast(true, 'Queue Refreshed', 'Refreshed 18 scheduled inspection runs.')}
+                    onClick={() => void loadAudits(false)}
                     className="w-7 h-7 flex items-center justify-center rounded border border-border-subtle hover:bg-surface text-muted hover:text-body"
-                    title="Refresh Queue"
+                    title="Muat ulang antrean"
                   >
                     <RefreshCw size={13} />
                   </button>
@@ -546,11 +570,11 @@ export function FieldInspectionsHub() {
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                 {(
                   [
-                    { id: 'all', label: 'All Audits (18)' },
-                    { id: 'today', label: 'Today / Imminent (6)' },
-                    { id: 'overdue', label: 'Overdue / SLA Risk (2)', alert: true },
-                    { id: 'completed', label: 'Completed (10)' },
-                    { id: 'templates', label: 'Templates & Forms' },
+                    { id: 'all', label: 'Semua Audit (18)' },
+                    { id: 'today', label: 'Hari Ini / Mendesak (6)' },
+                    { id: 'overdue', label: 'Terlambat / Risiko SLA (2)', alert: true },
+                    { id: 'completed', label: 'Selesai (10)' },
+                    { id: 'templates', label: 'Template & Formulir' },
                   ] as Array<{ id: QueueTab; label: string; alert?: boolean }>
                 ).map((t) => (
                   <button
@@ -582,7 +606,7 @@ export function FieldInspectionsHub() {
                     ref={searchInputRef}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search Audits, Assets, or Techs... (Ctrl+/)"
+                    placeholder="Cari Audit, Aset, atau Teknisi... (Ctrl+/)"
                     className="pl-8 pr-14 h-9 text-xs"
                   />
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border-subtle text-muted">
@@ -595,7 +619,7 @@ export function FieldInspectionsHub() {
                     onChange={(e) => setZone(e.target.value)}
                     className="w-full h-9 px-2 bg-card border border-border-strong text-body text-xs rounded"
                   >
-                    <option>Zone: All Facilities</option>
+                    <option>Zona: Semua Fasilitas</option>
                     <option>Basement Mech Room B-204</option>
                     <option>Sub-Basement Vault</option>
                     <option>Clean Lab Annex 4</option>
@@ -609,10 +633,10 @@ export function FieldInspectionsHub() {
                     onChange={(e) => setDiscipline(e.target.value)}
                     className="w-full h-9 px-2 bg-card border border-border-strong text-body text-xs rounded"
                   >
-                    <option>Discipline: All</option>
-                    <option>HVAC &amp; Chilled Water</option>
-                    <option>Electrical &amp; Switchgear</option>
-                    <option>Fire &amp; Life Safety</option>
+                    <option>Disiplin: Semua</option>
+                    <option>HVAC &amp; Air Dingin</option>
+                    <option>Elektrikal &amp; Switchgear</option>
+                    <option>Kebakaran &amp; Keselamatan</option>
                     <option>Cleanroom &amp; Bio-Env</option>
                   </select>
                 </div>
@@ -624,12 +648,12 @@ export function FieldInspectionsHub() {
               <table className="w-full text-left text-xs min-w-[680px]">
                 <thead>
                   <tr className="bg-surface text-muted text-[10px] font-bold uppercase tracking-wider border-b border-border-subtle">
-                    <th className="py-2.5 px-3">Audit ID &amp; Name</th>
-                    <th className="py-2.5 px-3">Target Asset / Zone</th>
-                    <th className="py-2.5 px-3">Cadence / Due</th>
-                    <th className="py-2.5 px-3">Auditor Assigned</th>
-                    <th className="py-2.5 px-3">Status / Criticality</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
+                    <th className="py-2.5 px-3">ID &amp; Nama Audit</th>
+                    <th className="py-2.5 px-3">Aset / Zona Target</th>
+                    <th className="py-2.5 px-3">Irama / Jatuh Tempo</th>
+                    <th className="py-2.5 px-3">Auditor</th>
+                    <th className="py-2.5 px-3">Status / Kekritisan</th>
+                    <th className="py-2.5 px-3 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
@@ -735,7 +759,7 @@ export function FieldInspectionsHub() {
                         {a.status === 'IN_PROGRESS' && (
                           <Link href={`/field/audits/${a.id}/run`}>
                             <Button className="h-7 px-2.5 text-xs gap-1 bg-cobalt-deep hover:bg-cobalt text-white">
-                              Open Run <Play size={11} />
+                              Buka Run <Play size={11} />
                             </Button>
                           </Link>
                         )}
@@ -746,7 +770,7 @@ export function FieldInspectionsHub() {
                             disabled={dispatching === a.id}
                             className="h-7 px-2.5 text-xs gap-1"
                           >
-                            {dispatching === a.id ? 'Dispatching…' : 'Force Dispatch'} <Bolt size={11} />
+                            {dispatching === a.id ? 'Mengirim…' : 'Dispatch Paksa'} <Bolt size={11} />
                           </Button>
                         )}
                         {a.status === 'SCHEDULED' && (
@@ -755,13 +779,13 @@ export function FieldInspectionsHub() {
                             onClick={() => setPreviewAudit(a)}
                             className="h-7 px-2.5 text-xs gap-1"
                           >
-                            Preview <Eye size={11} />
+                            Pratinjau <Eye size={11} />
                           </Button>
                         )}
                         {a.status === 'FINDINGS' && (
                           <Link href="/field/findings/FND-2026-0188">
                             <Button variant="secondary" className="h-7 px-2.5 text-xs gap-1 text-fail hover:bg-fail-bg border-fail/30">
-                              Review Findings <ArrowRight size={11} />
+                              Tinjau Temuan <ArrowRight size={11} />
                             </Button>
                           </Link>
                         )}
@@ -771,7 +795,7 @@ export function FieldInspectionsHub() {
                             onClick={() => setPreviewAudit(a)}
                             className="h-7 px-2.5 text-xs gap-1"
                           >
-                            Details <ChevronRight size={11} />
+                            Detail <ChevronRight size={11} />
                           </Button>
                         )}
                         {a.status === 'COMPLETED' && (
@@ -780,7 +804,7 @@ export function FieldInspectionsHub() {
                             onClick={() => setPreviewAudit(a)}
                             className="h-7 px-2.5 text-xs gap-1"
                           >
-                            Review <Eye size={11} />
+                            Tinjau <Eye size={11} />
                           </Button>
                         )}
                       </td>
@@ -792,14 +816,14 @@ export function FieldInspectionsHub() {
 
             {/* Table Footer / Pagination */}
             <div className="p-3 bg-surface border-t border-border-subtle flex items-center justify-between text-xs text-muted">
-              <span>Showing {filteredAudits.length} of {audits.length} audits {live ? '(live server list)' : '(demo offline)'}</span>
+              <span>Menampilkan {filteredAudits.length} dari {audits.length} audit {live ? '(daftar server)' : '(demo offline)'}</span>
               <div className="flex items-center gap-1 font-mono">
                 <Button variant="secondary" className="h-7 px-2 text-xs" disabled>
-                  Prev
+                  Sblm
                 </Button>
-                <span className="px-2 font-semibold text-body">Page 1 / 4</span>
+                <span className="px-2 font-semibold text-body">Hal 1 / 4</span>
                 <Button variant="secondary" className="h-7 px-2 text-xs">
-                  Next
+                  Lanjut
                 </Button>
               </div>
             </div>
@@ -812,14 +836,14 @@ export function FieldInspectionsHub() {
                 <Radar size={20} />
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-ink">Substation IoT Gateway Link</span>
+                <span className="text-xs font-bold text-ink">Tautan Gateway IoT Gardu</span>
                 <span className="text-[11px] font-mono text-muted">
-                  Modbus TCP/IP (demo — not connected) · reference AST-ELEC-01 Bus Bar Temp (42.4°C Nom)
+                  Modbus TCP/IP (demo — tidak tersambung) · referensi suhu bus bar AST-ELEC-01 (42,4°C nom)
                 </span>
               </div>
             </div>
             <span className="px-2 py-0.5 rounded-full bg-border-subtle border border-border-strong text-muted font-mono text-[10px] font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-muted" /> DEMO — NOT STREAMING
+              <span className="w-1.5 h-1.5 rounded-full bg-muted" /> DEMO — TIDAK STREAMING
             </span>
           </div>
         </div>
@@ -834,13 +858,13 @@ export function FieldInspectionsHub() {
                   <span className="px-2 py-0.5 rounded bg-cobalt-deep text-white font-mono text-[10px] font-bold">
                     TMPL-HVAC-CHL-02
                   </span>
-                  <span className="font-mono text-[11px] text-muted">v2.4 Draft</span>
+                  <span className="font-mono text-[11px] text-muted">v2.4 Draf</span>
                 </div>
                 <h3 className="text-sm font-bold text-ink mt-1 font-display">
-                  Central Chiller Safety &amp; Diagnostic Protocol
+                  Protokol Keselamatan &amp; Diagnostik Chiller Sentral
                 </h3>
                 <span className="text-[11px] text-muted">
-                  Target Asset Category: Industrial Water Chillers &amp; Central Plant
+                  Kategori Aset Target: Chiller Air Industri &amp; Central Plant
                 </span>
               </div>
               <button
@@ -855,10 +879,10 @@ export function FieldInspectionsHub() {
             <div className="flex items-center justify-between p-2.5 rounded bg-surface border border-border-subtle mb-3 text-xs">
               <span className="text-muted flex items-center gap-1.5">
                 <Layers size={14} className="text-cobalt" />
-                <span>Technician Flow: <strong>{steps.length} Mandated Steps</strong></span>
+                <span>Alur Teknisi: <strong>{steps.length} Langkah Wajib</strong></span>
               </span>
               <span className="text-pass-ink font-semibold font-mono text-[10px]">
-                Logic Guardrails Active
+                Guardrail Logika Aktif
               </span>
             </div>
 
@@ -905,7 +929,7 @@ export function FieldInspectionsHub() {
                     <div className="ml-5 p-2 rounded bg-card border border-border-subtle flex flex-col gap-1.5 text-xs">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <span className="text-muted text-[11px]">
-                          Guardrail: Min {st.min} {st.unit} — Max {st.max} {st.unit}
+                          Batas: Min {st.min} {st.unit} — Maks {st.max} {st.unit}
                         </span>
                         <div className="flex items-center gap-1">
                           <input
@@ -924,7 +948,7 @@ export function FieldInspectionsHub() {
                     <div className="ml-5 p-2 rounded bg-card border border-border-subtle flex items-center justify-between text-xs">
                       <span className="text-muted text-[11px]">{st.logic}</span>
                       <span className="px-1.5 py-0.5 rounded bg-surface font-mono text-[10px] font-semibold">
-                        {st.shotReq} Shot Required
+                        {st.shotReq} Foto Wajib
                       </span>
                     </div>
                   )}
@@ -945,25 +969,25 @@ export function FieldInspectionsHub() {
               <Dialog open={addStepOpen} onOpenChange={setAddStepOpen}>
                 <DialogTrigger asChild>
                   <Button variant="secondary" className="h-8 px-2.5 text-xs gap-1">
-                    <Plus size={13} /> + Add Checklist Step
+                    <Plus size={13} /> + Tambah Langkah Checklist
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
-                  <DialogTitle>Add Verification Step</DialogTitle>
+                  <DialogTitle>Tambah Langkah Verifikasi</DialogTitle>
                   <DialogDescription>
-                    Append a new verification checkpoint to the active protocol draft.
+                    Tambahkan checkpoint verifikasi baru ke draf protokol aktif.
                   </DialogDescription>
                   <div className="space-y-3 my-2 text-xs">
                     <div>
-                      <label className="font-semibold block mb-1">Step Title</label>
+                      <label className="font-semibold block mb-1">Judul Langkah</label>
                       <Input
                         value={newStepTitle}
                         onChange={(e) => setNewStepTitle(e.target.value)}
-                        placeholder="e.g. Check Oil Level & Color"
+                        placeholder="mis. Periksa Level & Warna Oli"
                       />
                     </div>
                     <div>
-                      <label className="font-semibold block mb-1">Step Type</label>
+                      <label className="font-semibold block mb-1">Tipe Langkah</label>
                       <select
                         value={newStepType}
                         onChange={(e) => setNewStepType(e.target.value as ChecklistStep['type'])}
@@ -978,22 +1002,22 @@ export function FieldInspectionsHub() {
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="secondary" onClick={() => setAddStepOpen(false)}>
-                      Cancel
+                      Batal
                     </Button>
-                    <Button onClick={handleAddStep}>Add Step</Button>
+                    <Button onClick={handleAddStep}>Tambah Langkah</Button>
                   </div>
                 </DialogContent>
               </Dialog>
 
               <div className="flex items-center gap-2">
                 <Button variant="secondary" onClick={handleSaveDraft} className="h-8 px-3 text-xs">
-                  Save Draft
+                  Simpan Draf
                 </Button>
                 <Button
                   onClick={handlePublishTemplate}
                   className="h-8 px-3 text-xs bg-cobalt-deep hover:bg-cobalt text-white gap-1"
                 >
-                  <Upload size={12} /> Publish Template (v2.4)
+                  <Upload size={12} /> Terbitkan Template (v2.4)
                 </Button>
               </div>
             </div>
@@ -1015,14 +1039,14 @@ export function FieldInspectionsHub() {
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-bold text-ink group-hover:text-cobalt transition-colors font-display">
-                  Mobile Tablet Execution View
+                  Tampilan Eksekusi Tablet Mobile
                 </h4>
                 <span className="px-2 py-0.5 rounded bg-pass-bg text-pass-ink font-mono text-[10px] font-bold">
-                  Offline PWA Ready
+                  PWA Offline Siap
                 </span>
               </div>
               <p className="text-xs text-muted mt-0.5">
-                Open ruggedized technician inspection interface with barcode scanning &amp; photo logging.
+                Buka antarmuka inspeksi teknisi rugged dengan scan barcode &amp; log foto.
               </p>
             </div>
           </div>
@@ -1041,14 +1065,14 @@ export function FieldInspectionsHub() {
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-bold text-ink group-hover:text-fail transition-colors font-display">
-                  Findings &amp; Auto-WO Conversion Desk
+                  Desk Temuan &amp; Konversi WO Otomatis
                 </h4>
                 <span className="px-2 py-0.5 rounded bg-fail text-white font-mono text-[10px] font-bold">
-                  2 Action Required
+                  2 Perlu Tindakan
                 </span>
               </div>
               <p className="text-xs text-muted mt-0.5">
-                Triage failed inspection steps directly into prioritized Work Orders with assigned maintenance crews.
+                Triase langkah inspeksi gagal menjadi work order prioritas dengan kru terassign.
               </p>
             </div>
           </div>
@@ -1060,21 +1084,21 @@ export function FieldInspectionsHub() {
       {previewAudit && (
         <Dialog open={!!previewAudit} onOpenChange={(open) => !open && setPreviewAudit(null)}>
           <DialogContent>
-            <DialogTitle>Audit Protocol Preview</DialogTitle>
+            <DialogTitle>Pratinjau Protokol Audit</DialogTitle>
             <DialogDescription>
               {previewAudit.id} — {previewAudit.name}
             </DialogDescription>
             <div className="rounded border border-border-subtle bg-surface p-3 text-xs flex flex-col gap-2 my-2">
               <div className="flex justify-between">
-                <span className="text-muted">Target Asset:</span>
+                <span className="text-muted">Aset Target:</span>
                 <span className="font-mono font-bold">{previewAudit.assetId}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted">Zone:</span>
+                <span className="text-muted">Zona:</span>
                 <span>{previewAudit.zone}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted">Assigned Auditor:</span>
+                <span className="text-muted">Auditor:</span>
                 <span className="font-semibold">{previewAudit.assignee} ({previewAudit.assigneeRole})</span>
               </div>
               <div className="flex justify-between">
@@ -1083,7 +1107,7 @@ export function FieldInspectionsHub() {
               </div>
             </div>
             <div className="flex justify-end pt-2">
-              <Button onClick={() => setPreviewAudit(null)}>Close</Button>
+              <Button onClick={() => setPreviewAudit(null)}>Tutup</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -1111,7 +1135,7 @@ export function FieldInspectionsHub() {
             </div>
             <button
               type="button"
-              aria-label="Dismiss"
+              aria-label="Tutup notifikasi"
               onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}
               className="opacity-70 hover:opacity-100"
             >

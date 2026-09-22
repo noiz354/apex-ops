@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ClipboardList, CloudUpload, ListChecks, TriangleAlert } from 'lucide-react';
-import { CANON } from '@/lib/canon';
 import { cn } from '@/lib/utils';
 import { subscribeAuthSignals } from '@/lib/auth/broadcast';
 import { listOutbox, flushOutbox, subscribeOutbox } from '@/lib/offline/outbox';
 
-const RUN_HREF = `/field/audits/${CANON.inspection}/run`;
+const RUN_HREF = '/field/audits/INS-2026-0412/run';
 
 export function FieldShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
@@ -50,13 +49,13 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
   const tabs = [
     { href: '/field/audits', label: 'Audits', Icon: ClipboardList, badge: 3, badgeTone: 'bg-fail', active: path === '/field/audits' },
     { href: RUN_HREF, label: 'Checklist', Icon: ListChecks, badge: 0, badgeTone: '', active: path.endsWith('/run') },
-    { href: '/field/findings/new', label: 'Finding', Icon: TriangleAlert, badge: 0, badgeTone: '', active: path.startsWith('/field/findings') },
-    { href: '/field/sync', label: 'Sync', Icon: CloudUpload, badge: pending, badgeTone: 'bg-warn', active: path === '/field/sync' },
+    { href: '/field/findings/new', label: 'Temuan', Icon: TriangleAlert, badge: 0, badgeTone: '', active: path.startsWith('/field/findings') },
+    { href: '/field/sync', label: 'Sinkron', Icon: CloudUpload, badge: pending, badgeTone: 'bg-warn', active: path === '/field/sync' },
   ];
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 w-full pb-28">{children}</div>
-      <nav className="no-print fixed bottom-0 w-full z-50 pb-safe bg-surface/95 backdrop-blur-xl border-t-2 border-slate900" aria-label="Field">
+      <nav className="no-print fixed bottom-0 w-full z-50 pb-safe bg-surface/95 backdrop-blur-xl border-t-2 border-slate900" aria-label="Lapangan">
         <div className="h-20 px-4 flex items-stretch justify-around max-w-3xl mx-auto w-full">
           {tabs.map((t) => (
             <Link

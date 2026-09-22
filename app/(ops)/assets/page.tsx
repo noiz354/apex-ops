@@ -8,5 +8,5 @@ export default async function AssetsPage() {
   const ctx = await getSessionContext();
   if (!ctx) redirect('/login');
   const rows = await listAssets(getDb(), ctx);
-  return <AssetRegistry rows={rows} orgId={ctx.orgId} />;
+  return <AssetRegistry rows={rows} />;
 }

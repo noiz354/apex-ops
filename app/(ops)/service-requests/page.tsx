@@ -13,7 +13,6 @@ export default async function ServiceRequestsPage() {
     <ServiceRequestList
       rows={rows}
       can={{ create: can(ctx.role, 'sr.create'), transition: can(ctx.role, 'sr.transition') }}
-      orgId={ctx.orgId}
     />
   );
 }

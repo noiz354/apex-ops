@@ -15,7 +15,6 @@ export default async function WorkOrdersPage() {
       rows={rows}
       techs={techs}
       can={{ create: can(ctx.role, 'wo.create'), transition: can(ctx.role, 'wo.transition') }}
-      orgId={ctx.orgId}
     />
   );
 }
