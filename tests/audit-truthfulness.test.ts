@@ -379,10 +379,9 @@ test('SDD T2-5 telemetry claims stay honest (no fake synced/streaming)', () => {
     'FacilityHub zone tree must stay labeled staged/not synced',
   );
 
-  const inspections = readFileSync(
-    new URL('../components/field/FieldInspectionsHub.tsx', import.meta.url).pathname,
-    'utf8',
-  );
+  const inspections =
+    readFileSync(new URL('../components/field/FieldInspectionsHub.tsx', import.meta.url).pathname, 'utf8') +
+    readFileSync(new URL('../components/field/FihQueue.tsx', import.meta.url).pathname, 'utf8');
   assert.ok(!inspections.includes('100% Synced'), 'FieldInspectionsHub still fabricates 100% Synced');
   assert.ok(!inspections.includes('SCADA STREAMING'), 'FieldInspectionsHub still fabricates SCADA STREAMING');
   assert.ok(!inspections.includes('Modbus TCP/IP: Active'), 'FieldInspectionsHub still claims live Modbus');
@@ -419,6 +418,13 @@ test('GAP-23 P0/P1/P2: canon fixture import stays removed from remediated surfac
     'components/purchasing/dialogs.tsx',
     'components/field/RunChecklist.tsx',
     'components/field/FieldInspectionsHub.tsx',
+    'components/field/fih-model.ts',
+    'components/field/FihHeader.tsx',
+    'components/field/FihKpiCards.tsx',
+    'components/field/FihQueue.tsx',
+    'components/field/FihTemplateBuilder.tsx',
+    'components/field/FihFastNav.tsx',
+    'components/field/FihPreviewDialog.tsx',
     'components/field/FindingDesk.tsx',
     'components/field/FindingCapture.tsx',
     'components/field/SyncStatus.tsx',
@@ -447,6 +453,13 @@ test('GAP-23 P0/P1/P2: infra/tenant leaks stay absent from remediated surfaces',
     'components/purchasing/PurchaseDetail.tsx',
     'components/field/RunChecklist.tsx',
     'components/field/FieldInspectionsHub.tsx',
+    'components/field/fih-model.ts',
+    'components/field/FihHeader.tsx',
+    'components/field/FihKpiCards.tsx',
+    'components/field/FihQueue.tsx',
+    'components/field/FihTemplateBuilder.tsx',
+    'components/field/FihFastNav.tsx',
+    'components/field/FihPreviewDialog.tsx',
     'components/field/FindingDesk.tsx',
     'components/field/FindingCapture.tsx',
     'components/ops/TopBar.tsx',
@@ -510,7 +523,7 @@ test('GAP-23 P0/P1/P2: Indonesian copy present on remediated surfaces', () => {
     ['components/purchasing/PurchaseDetail.tsx', ['Tinjau', 'Penerimaan', 'Tanda Tangan']],
     ['components/purchasing/dialogs.tsx', ['Jumlah', 'Jenis sengketa', 'Minta Penawaran OEM']],
     ['components/field/RunChecklist.tsx', ['Langkah 01', 'LOTO']],
-    ['components/field/FieldInspectionsHub.tsx', ['Beranda', 'Ekspor Log Audit', 'Serah Terima Shift']],
+    ['components/field/FihHeader.tsx', ['Beranda', 'Ekspor Log Audit', 'Serah Terima Shift']],
     ['components/field/FindingDesk.tsx', ['Konversi Temuan ke WO', 'Tutup Temuan']],
     ['components/field/FindingCapture.tsx', ['Catat Temuan Lapangan', 'Kirim Temuan']],
     ['components/field/SyncStatus.tsx', ['Status Sinkron', 'Antrean Outbox']],
@@ -656,7 +669,8 @@ test('GAP-24 Fase A: list filtering is memoized', () => {
 test('GAP-24 Fase A: Indonesian copy present on newly remediated surfaces', () => {
   const cases = [
     ['components/inventory/InventoryLedger.tsx', ['Inventaris &amp; Ledger Suku Cadang', 'Semua Kategori']],
-    ['components/audit/AuditTrail.tsx', ['Ledger Diekspor', 'Ekspor Log CSV']],
+    ['components/audit/AuditTrail.tsx', ['Ledger Diekspor']],
+    ['components/audit/AuditHeader.tsx', ['Ekspor Log CSV']],
     ['components/reports/ReportsHub.tsx', ['Hub Laporan &amp; Analitik', 'Buat &amp; Unduh Dossier']],
     ['components/notifications/NotificationsHub.tsx', ['Ekspor Log (CSV)', 'Log diekspor']],
     ['components/settings/SettingsHub.tsx', ['Pengaturan &amp; Konfigurasi Sistem', 'Ekspor Bundle']],
